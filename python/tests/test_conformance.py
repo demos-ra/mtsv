@@ -1,25 +1,10 @@
 """Run the MTSV conformance files against the mtsv package."""
 
 import io
-import json
 import unittest
-from pathlib import Path
 
 import mtsv
-
-CONFORMANCE = Path(__file__).resolve().parents[2] / "conformance"
-
-
-def paths(folder, suffix):
-    found = sorted((CONFORMANCE / folder).glob("*" + suffix))
-    if not found:
-        raise FileNotFoundError(CONFORMANCE / folder)
-    return found
-
-
-def load_json(path):
-    with path.open(encoding="utf-8") as file:
-        return json.load(file)
+from support import load_json, paths
 
 
 class TestConforming(unittest.TestCase):

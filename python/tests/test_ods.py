@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from mtsv.integrations import ods
-from test_conformance import CONFORMANCE, load_json, paths
+from support import CONFORMANCE, load_json, paths
 
 NOT_REPRESENTABLE_IN_ODS = {"control-characters"}
 TRAILING_EMPTY_RECORDS_LEFT_BEHIND = {
@@ -159,6 +159,14 @@ class TestLoad(unittest.TestCase):
             "<table:table><table:table-row><table:table-cell>"
             "<text:p>b</text:p></table:table-cell></table:table-row>"
             "</table:table>"
+        )
+        with self.assertRaises(ValueError):
+            ods.load(package(tables), errors="ignore")
+
+    def test_unnamed_empty_sheet_stops(self):
+        tables = (
+            "<table:table><table:table-row><table:table-cell/>"
+            "</table:table-row></table:table>"
         )
         with self.assertRaises(ValueError):
             ods.load(package(tables), errors="ignore")

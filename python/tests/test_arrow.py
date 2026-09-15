@@ -2,7 +2,7 @@
 
 import unittest
 
-from test_conformance import CONFORMANCE, load_json, paths
+from support import CONFORMANCE, load_json, paths
 
 try:
     import pyarrow as pa
@@ -60,6 +60,35 @@ class TestFromArrow(unittest.TestCase):
                     "records": [["23", "Paul"], ["45", ""]],
                 }
             ],
+        )
+
+    def test_metadata_needs_confirmation(self):
+        column = pa.field("a", pa.string(), metadata={"k": "v"})
+        tables = {
+            "table metadata": pa.table(
+                {"a": pa.array(["x"])}
+            ).replace_schema_metadata({"k": "v"}),
+            "column metadata": pa.table(
+                {"a": pa.array(["x"])}, schema=pa.schema([column])
+            ),
+        }
+        expected = [{"sheet name": "S", "header": ["a"], "records": [["x"]]}]
+        for label, table in tables.items():
+            with self.subTest(label):
+                with self.assertRaises(ValueError):
+                    arrow.from_arrow([("S", table)])
+                self.assertEqual(
+                    arrow.from_arrow([("S", table)], errors="ignore"),
+                    expected,
+                )
+
+    def test_rows_without_columns_need_confirmation(self):
+        table = pa.table({"a": pa.array(["x", "y"])}).drop_columns(["a"])
+        with self.assertRaises(ValueError):
+            arrow.from_arrow([("S", table)])
+        self.assertEqual(
+            arrow.from_arrow([("S", table)], errors="ignore"),
+            [{"sheet name": "S", "header": None, "records": []}],
         )
 
     def test_all_string_types_are_text(self):

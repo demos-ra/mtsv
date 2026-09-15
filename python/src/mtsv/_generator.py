@@ -95,5 +95,5 @@ def field_char(char: str) -> bool:
 
 
 def eol() -> str:
-    """Generate: eol = LF / CRLF, using LF, the line feed action of Y."""
+    """Generate: eol = LF / CRLF, using LF, which gives the next record."""
     return LF

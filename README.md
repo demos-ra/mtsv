@@ -102,7 +102,7 @@ Every implementation is tested against the same files. Results are JSON
 |--------------------------------------|-------------------------------|---------------------------------------------------------------------|
 | `conformance/conforming/`            | `name.mtsv` with `name.json`  | parse `name.mtsv` to `name.json`, and generate a conforming file from `name.json` that parses back to it |
 | `conformance/non-conforming/`        | `name.mtsv`                   | nothing: these files are not MTSV, and a parser may accept or reject them |
-| `conformance/cannot-be-represented/` | `name.json`                   | not write these values                                              |
+| `conformance/cannot-be-represented/` | `name.json`                   | not write these values or sheets                                    |
 
 ## Status
 

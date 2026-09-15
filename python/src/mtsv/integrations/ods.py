@@ -116,6 +116,7 @@ def load(fp: BinaryIO, errors: str = "strict") -> list[dict[str, Any]]:
         raise ValueError(
             "these would be left behind: " + ", ".join(sorted(extras))
         )
+    mtsv.dumps(sheets)
     return sheets
 
 
@@ -286,30 +287,18 @@ def _spreadsheet(
         raise ValueError("the document is not an office:spreadsheet")
     _note_attributes(spreadsheet, (), extras)
     sheets = []
-    index = 0
     for child in spreadsheet:
         if child.tag != _TABLE_TABLE:
             extras.add(_prefixed(child.tag))
             continue
-        sheet = _sheet(child, index, extras)
-        index += 1
-        if sheet is not None:
-            sheets.append(sheet)
+        sheets.append(_sheet(child, extras))
     return sheets
 
 
-def _sheet(
-    element: ElementTree.Element, index: int, extras: set[str]
-) -> dict[str, Any] | None:
+def _sheet(element: ElementTree.Element, extras: set[str]) -> dict[str, Any]:
     """Parse table:table into a sheet, reading only its used area."""
     _note_attributes(element, (_NAME,), extras)
     name = element.get(_NAME)
-    label = "the unnamed sheet" if name is None else f"sheet {name!r}"
-    if name is not None and not _representable(name):
-        raise ValueError(
-            "a field or sheet name that contains HT, LF, FF, or CR"
-            f" cannot be represented in MTSV: {label}"
-        )
     lines: list[list[str]] = []
     pending = 0
     for count, values in _rows(element, extras):
@@ -319,23 +308,8 @@ def _sheet(
             lines.extend(list(values) for _ in range(count))
         else:
             pending += count
-    for row, values in enumerate(lines, 1):
-        for column, value in enumerate(values, 1):
-            if not _representable(value):
-                raise ValueError(
-                    "a field or sheet name that contains HT, LF, FF, or CR"
-                    f" cannot be represented in MTSV: {label},"
-                    f" row {row}, column {column}"
-                )
     if not lines:
-        if name is None:
-            return None
         return {"sheet name": name, "header": None, "records": []}
-    if name is None and index != 0:
-        raise ValueError(
-            "an MTSV file has an unnamed sheet only if the file contains"
-            " at least one line before the first FF"
-        )
     width = max(len(values) for values in lines)
     padded = [values + [""] * (width - len(values)) for values in lines]
     return {"sheet name": name, "header": padded[0], "records": padded[1:]}
@@ -453,11 +427,6 @@ def _to_spaces(text: str) -> str:
     text = text.replace(_HTAB, _SPACE)
     text = text.replace(_CR, _SPACE)
     return text.replace(_LF, _SPACE)
-
-
-def _representable(value: str) -> bool:
-    """Match text that MTSV can hold: no HT, LF, or CR."""
-    return not any(char in value for char in (_HTAB, _LF, _CR))
 
 
 if __name__ == "__main__":
