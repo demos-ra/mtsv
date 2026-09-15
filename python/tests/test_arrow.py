@@ -30,7 +30,7 @@ class TestToArrow(unittest.TestCase):
                     arrow.to_arrow(load_json(path))
 
     def test_tables(self):
-        value = load_json(CONFORMANCE / "conforming" / "named-only.json")
+        value = load_json(CONFORMANCE / "conforming" / "multiple-sheets.json")
         pairs = arrow.to_arrow(value)
         names = [name for name, table in pairs]
         self.assertEqual(names, ["People", "Animals"])

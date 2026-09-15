@@ -3,7 +3,7 @@
 Implementations and integrations for Multi-Sheet Tab-Separated Values (MTSV).
 
 * [Specification](https://github.com/demos-ra/mtsv-spec)
-* [Internet-Draft on the IETF Datatracker](https://datatracker.ietf.org/doc/draft-demos-ra-mtsv/)
+* [Internet-Draft on the IETF Datatracker](https://datatracker.ietf.org/doc/draft-demosra-mtsv/)
 
 ## Layout
 
@@ -31,7 +31,8 @@ The second line also installs pyarrow, for the Arrow integration.
 ### Read and write MTSV
 
 Sheets are a list of dictionaries with `"sheet name"`, `"header"`, and
-`"records"`, the same shape as the conformance results below.
+`"records"`, the same shape as the
+[conformance results](conformance/README.md).
 
 ```python
 import mtsv
@@ -94,15 +95,7 @@ python -m unittest discover -s python/tests
 
 ## Conformance
 
-Every implementation is tested against the same files. Results are JSON
-(RFC 8259): an array of sheets, each with `"sheet name"`, `"header"`, and
-`"records"`.
-
-| Folder                               | Files                         | An implementation must                                              |
-|--------------------------------------|-------------------------------|---------------------------------------------------------------------|
-| `conformance/conforming/`            | `name.mtsv` with `name.json`  | parse `name.mtsv` to `name.json`, and generate a conforming file from `name.json` that parses back to it |
-| `conformance/non-conforming/`        | `name.mtsv`                   | nothing: these files are not MTSV, and a parser may accept or reject them |
-| `conformance/cannot-be-represented/` | `name.json`                   | not write these values or sheets                                    |
+See [conformance/README.md](conformance/README.md).
 
 ## Status
 

@@ -65,7 +65,7 @@ class TestDump(unittest.TestCase):
 
     def test_package(self):
         buffer = io.BytesIO()
-        value = load_json(CONFORMANCE / "conforming" / "named-only.json")
+        value = load_json(CONFORMANCE / "conforming" / "multiple-sheets.json")
         ods.dump(value, buffer)
         with zipfile.ZipFile(buffer) as archive:
             first = archive.infolist()[0]
@@ -178,10 +178,10 @@ class TestLoad(unittest.TestCase):
 
 class TestMain(unittest.TestCase):
     def test_converts_both_ways(self):
-        original = CONFORMANCE / "conforming" / "named-only.mtsv"
+        original = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
         with tempfile.TemporaryDirectory() as directory:
-            spreadsheet = Path(directory, "named-only.ods")
-            back = Path(directory, "named-only.mtsv")
+            spreadsheet = Path(directory, "multiple-sheets.ods")
+            back = Path(directory, "multiple-sheets.mtsv")
             ods.main([str(original), str(spreadsheet)])
             ods.main([str(spreadsheet), str(back)])
             self.assertEqual(back.read_bytes(), original.read_bytes())
