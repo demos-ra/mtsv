@@ -27,7 +27,8 @@ class TestConforming(unittest.TestCase):
         for path in paths("conforming", ".mtsv"):
             with self.subTest(path.name):
                 with path.open("rb") as file:
-                    self.assertEqual(mtsv.load(file), load_json(path.with_suffix(".json")))
+                    expected = load_json(path.with_suffix(".json"))
+                    self.assertEqual(mtsv.load(file), expected)
 
     def test_generate(self):
         for path in paths("conforming", ".json"):
@@ -41,7 +42,8 @@ class TestConforming(unittest.TestCase):
                 value = load_json(path)
                 buffer = io.BytesIO()
                 mtsv.dump(value, buffer)
-                self.assertEqual(buffer.getvalue(), mtsv.dumps(value).encode("utf-8"))
+                expected = mtsv.dumps(value).encode("utf-8")
+                self.assertEqual(buffer.getvalue(), expected)
 
 
 class TestNonConforming(unittest.TestCase):
