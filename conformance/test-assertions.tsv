@@ -1,0 +1,15 @@
+Identifier	Normative Source	Target	Predicate	Prescription Level
+grammar-01	draft-demos-ra-mtsv-00, Section 4.4	MTSV file	[the MTSV file] matches the grammar in Section 4.4	mandatory
+grammar-02	draft-demos-ra-mtsv-00, Section 4.4	MTSV file	[the MTSV file] has, in each sheet, records with the same number of fields as the header of that sheet	mandatory
+parsers-01	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] accepts every MTSV file that conforms to Section 4	mandatory
+parsers-02	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] treats the lines before the first FF, if any, as the unnamed sheet, and each line that begins with an FF as the start of a new sheet	mandatory
+parsers-03	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] accepts both LF and CRLF as line breaks	mandatory
+parsers-04	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] accepts a final record that is not followed by a line break	permitted
+parsers-05	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] ignores a byte order mark at the start of a file	permitted
+parsers-06	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] accepts input that does not conform to this document	permitted
+parsers-07	draft-demos-ra-mtsv-00, Section 5	parser	[the parser] sets limits on the size of files, the number of sheets, records, and fields, and the length of fields and sheet names	permitted
+generators-01	draft-demos-ra-mtsv-00, Section 6	generator	[the generator] produces MTSV files that conform to Section 4	mandatory
+generators-02	draft-demos-ra-mtsv-00, Section 6	generator	[the generator] ends every record with a line break	mandatory
+generators-03	draft-demos-ra-mtsv-00, Section 6	generator	[the generator] encodes MTSV files in UTF-8	preferred
+generators-04	draft-demos-ra-mtsv-00, Section 6	generator	[the generator] does not add a byte order mark	mandatory
+generators-05	draft-demos-ra-mtsv-00, Section 6	generator	[the generator] does not write a field or sheet name that contains HT, LF, FF, or CR	mandatory
