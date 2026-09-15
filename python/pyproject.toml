@@ -12,6 +12,9 @@ name = "mtsv"
 requires-python = ">=3.10"
 version = "0.1.0"
 
+[project.optional-dependencies]
+arrow = ["pyarrow>=16"]
+
 [project.urls]
 source = "https://github.com/demos-ra/mtsv"
 issues = "https://github.com/demos-ra/mtsv/issues"
