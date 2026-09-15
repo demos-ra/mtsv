@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+authors = [{ name = "Demos Ra", email = "demos_ra@hotmail.com" }]
+description = "Python implementation of Multi-Sheet Tab-Separated Values (MTSV)"
+keywords = ["tsv", "tabular data", "media type"]
+license = "MIT"
+license-files = ["LICENSE"]
+name = "mtsv"
+requires-python = ">=3.10"
+version = "0.1.0"
+
+[project.urls]
+source = "https://github.com/demos-ra/mtsv"
+issues = "https://github.com/demos-ra/mtsv/issues"
