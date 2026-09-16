@@ -1,10 +1,11 @@
-"""Generate MTSV text, following draft-demos-ra-mtsv-01, Section 6."""
+"""Generate MTSV text, following draft-demosra-mtsv-00, Section 6."""
 
 from typing import Any
 
 HTAB = chr(0x09)
 LF = chr(0x0A)
 FF = chr(0x0C)
+SIGNATURE = chr(0xFEFF)
 
 
 def mtsv_file(sheets: list[dict[str, Any]]) -> str:
@@ -24,6 +25,12 @@ def unnamed_sheet(sheet: dict[str, Any], index: int) -> str:
         raise ValueError(
             "an MTSV file has an unnamed sheet only if the file contains"
             " at least one line before the first FF"
+        )
+    if sheet["header"] and sheet["header"][0].startswith(SIGNATURE):
+        raise ValueError(
+            "the first field of the unnamed sheet cannot begin with U+FEFF,"
+            " because a parser treats that character as an encoding"
+            " signature"
         )
     return sheet_body(sheet)
 
@@ -95,5 +102,5 @@ def field_char(char: str) -> bool:
 
 
 def eol() -> str:
-    """Generate: eol = LF / CRLF, using LF, which gives the next record."""
+    """Generate: eol = LF / CRLF, writing LF."""
     return LF

@@ -1,4 +1,4 @@
-"""Parse MTSV text, following draft-demos-ra-mtsv-01, Section 4.4."""
+"""Parse MTSV text, following draft-demosra-mtsv-00, Section 5."""
 
 from typing import Any
 
@@ -7,12 +7,21 @@ LF = chr(0x0A)
 FF = chr(0x0C)
 CR = chr(0x0D)
 CRLF = CR + LF
+SIGNATURE = chr(0xFEFF)
 
 
 class MTSVDecodeError(ValueError):
-    """Subclass of ValueError for text that is not an MTSV file."""
+    """Subclass of ValueError with the following additional properties:
+
+    msg: The unformatted error message
+    doc: The MTSV document being parsed
+    pos: The start index of doc where parsing failed
+    lineno: The line corresponding to pos
+    colno: The column corresponding to pos
+    """
 
     def __init__(self, msg: str, doc: str, pos: int) -> None:
+        """Store msg, doc and pos, and the line and column of pos."""
         lineno = doc.count(LF, 0, pos) + 1
         colno = pos - doc.rfind(LF, 0, pos)
         super().__init__(f"{msg}: line {lineno} column {colno} (char {pos})")
@@ -22,9 +31,19 @@ class MTSVDecodeError(ValueError):
         self.lineno = lineno
         self.colno = colno
 
+    def __reduce__(self) -> tuple[type, tuple[str, str, int]]:
+        """Return how to rebuild this error when it is unpickled."""
+        return self.__class__, (self.msg, self.doc, self.pos)
+
 
 def mtsv_file(src: str, pos: int) -> tuple[int, list[dict[str, Any]]]:
-    """Parse: mtsv-file = unnamed-sheet *named-sheet."""
+    """Parse: mtsv-file = unnamed-sheet *named-sheet.
+
+    Skip a U+FEFF at the start of the file, which is an encoding
+    signature (Section 5).
+    """
+    if pos == 0 and src.startswith(SIGNATURE):
+        pos = 1
     pos, sheet = unnamed_sheet(src, pos)
     sheets: list[dict[str, Any]] = [] if sheet is None else [sheet]
     while pos < len(src):

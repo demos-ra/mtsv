@@ -79,10 +79,11 @@ sheets = arrow.from_arrow(tables)
 ### What is left behind
 
 MTSV holds sheets, names, rows, and text. Going out to ODS or Arrow keeps all
-of it, with two ODS exceptions: control characters raise `ValueError`, and
-empty rows at the end of a sheet do not come back from ODS. Coming back in,
-anything else (formatting, formulas, types, missing values) raises
-`ValueError` by default. To confirm and leave it behind, pass
+of it, with two ODS exceptions: characters that XML 1.0 does not allow raise
+`ValueError`, and empty rows and columns at the edge of a sheet do not come
+back from ODS, so a sheet of only empty fields comes back as an empty sheet.
+Coming back in, anything else (formatting, formulas, types, missing values)
+raises `ValueError` by default. To confirm and leave it behind, pass
 `errors="ignore"`, or `--errors ignore` on the command line. Text that MTSV
 cannot hold, such as a tab or line break inside a value, always raises
 `ValueError`.
