@@ -13,7 +13,7 @@ implementations.
 | Folder         | Contents                                                |
 |----------------|---------------------------------------------------------|
 | `conformance/` | Test files shared by every implementation               |
-| `python/`      | Python implementation, with ODS and Apache Arrow integrations |
+| `python/`      | Python implementation, with ODS, XLSX and Apache Arrow integrations |
 
 Each language folder holds one implementation of the specification: a parser
 and a generator. Integrations connect an implementation to other standards.
@@ -32,8 +32,7 @@ version is the `version` field of
 
 ## Status
 
-Python implementation with ODS and Apache Arrow integrations, released on PyPI
-as [mtsv](https://pypi.org/project/mtsv/). Versions follow
+Released on PyPI as [mtsv](https://pypi.org/project/mtsv/). Versions follow
 [Semantic Versioning](https://semver.org).
 
 ## License

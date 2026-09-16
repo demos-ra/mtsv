@@ -1,8 +1,8 @@
 # MTSV for Python
 
 A parser and a generator for Multi-Sheet Tab-Separated Values (MTSV), with
-integrations for spreadsheets (ODS) and data tools (Apache Arrow). The
-version is the `version` field of `pyproject.toml`.
+integrations for spreadsheets (ODS and XLSX) and data tools (Apache Arrow).
+The version is the `version` field of `pyproject.toml`.
 
 * [Specification](https://github.com/demos-ra/mtsv-spec)
 * [Repository](https://github.com/demos-ra/mtsv)
@@ -67,6 +67,25 @@ python -m mtsv.integrations.ods book.mtsv book.ods
 python -m mtsv.integrations.ods book.ods book.mtsv
 ```
 
+## Spreadsheets (XLSX)
+
+```python
+from mtsv.integrations import xlsx
+
+with open("book.xlsx", "wb") as file:
+    xlsx.dump(sheets, file)
+
+with open("book.xlsx", "rb") as file:
+    sheets = xlsx.load(file)
+```
+
+From the command line:
+
+```
+python -m mtsv.integrations.xlsx book.mtsv book.xlsx
+python -m mtsv.integrations.xlsx book.xlsx book.mtsv
+```
+
 ## Data tools (Apache Arrow)
 
 ```python
@@ -80,16 +99,30 @@ sheets = arrow.from_arrow(tables)
 
 ## What is left behind
 
-MTSV holds sheets, names, rows, and text. Going out to ODS or Arrow keeps all
-of it, with two ODS exceptions: characters that XML 1.0 does not allow raise
-`ValueError`, and empty rows and columns at the edge of a sheet do not come
-back from ODS, so a sheet of only empty fields comes back as an empty sheet.
-Coming back in, anything else (formatting, formulas, types, missing values)
+MTSV holds sheets, names, rows, and text. Everything else is left at the
+door, and each door reports what it dropped.
+
+Going out, ODS and XLSX both raise `ValueError` for a character that XML
+1.0 does not allow. XLSX also raises for a sheet with no name, for a file
+with no sheets, and for a sheet wider than 16,384 columns or longer than
+1,048,576 rows, because a workbook holds none of those. Begin a file with
+a form feed and name every sheet, and it converts.
+
+Coming back in, whatever a spreadsheet holds that MTSV does not —
+formatting, formulas, types, styles, and the parts that carry them —
 raises `ValueError` by default. To confirm and leave it behind, pass
-`errors="ignore"`, or `--errors ignore` on the command line. Text that MTSV
-cannot hold, such as a tab or line break inside a value, always raises
-`ValueError`. So does an Arrow column whose values cannot be text at all, such
-as binary, a list, or a struct.
+`errors="ignore"`, or `--errors ignore` on the command line.
+
+Two differences are worth knowing. Empty rows and columns at the edge of
+an ODS sheet do not come back, so an ODS sheet of only empty fields comes
+back as an empty sheet; XLSX keeps them, because a workbook may leave a
+cell out entirely. And a workbook holds a date as a serial number, with
+the date format kept apart from it, so a cell showing `Jan-23` comes back
+from XLSX as `44927` where ODS gives `2023-01-15`.
+
+Text that MTSV cannot hold, such as a tab or line break inside a value,
+always raises `ValueError`. So does an Arrow column whose values cannot be
+text at all, such as binary, a list, or a struct.
 
 ## Layout
 
