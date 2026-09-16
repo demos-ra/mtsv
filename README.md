@@ -19,14 +19,19 @@ and a generator. Integrations connect an implementation to other standards.
 
 ### Install
 
-From this repository:
+From this repository. A Python that an operating system manages does not
+accept packages directly, so install into a virtual environment:
 
 ```
-pip install ./python
-pip install "./python[arrow]"
+python3 -m venv .venv
+.venv/bin/pip install ./python
 ```
 
-The second line also installs pyarrow, for the Arrow integration.
+For the Arrow integration, which also installs pyarrow:
+
+```
+.venv/bin/pip install "./python[arrow]"
+```
 
 ### Read and write MTSV
 
@@ -86,12 +91,13 @@ Coming back in, anything else (formatting, formulas, types, missing values)
 raises `ValueError` by default. To confirm and leave it behind, pass
 `errors="ignore"`, or `--errors ignore` on the command line. Text that MTSV
 cannot hold, such as a tab or line break inside a value, always raises
-`ValueError`.
+`ValueError`. So does an Arrow column whose values cannot be text at all, such
+as binary, a list, or a struct.
 
 ### Test
 
 ```
-python -m unittest discover -s python/tests
+.venv/bin/python -m unittest discover -s python/tests
 ```
 
 ## Conformance
@@ -101,7 +107,7 @@ See [conformance/README.md](conformance/README.md).
 ## Status
 
 Python implementation with ODS and Apache Arrow integrations. Not yet released
-on PyPI.
+on PyPI. Versions follow [Semantic Versioning](https://semver.org).
 
 ## License
 
