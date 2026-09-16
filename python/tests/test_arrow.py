@@ -1,9 +1,7 @@
-"""Test mtsv.integrations.arrow: the door out to Arrow and the door in."""
+"""Test mtsv.integrations.arrow: the door out and the door in."""
 
 import datetime
 import unittest
-
-from support import CONFORMANCE, load_json, paths
 
 try:
     import pyarrow as pa
@@ -11,6 +9,8 @@ try:
     from mtsv.integrations import arrow
 except ImportError:
     pa = arrow = None
+
+from support import load_json, paths
 
 # Cases outside MTSV that an Arrow table cannot hold in the first place.
 ARROW_CANNOT_HOLD = {
@@ -229,7 +229,7 @@ class TestFromArrow(unittest.TestCase):
         )
 
     def test_extension_type_needs_confirmation(self):
-        """An extension type, which is metadata of a field, is left behind."""
+        """An extension type is field metadata, so it is left behind."""
         table = column(["x"], metadata={"ARROW:extension:name": "uuid"})
         with self.assertRaises(ValueError):
             arrow.from_arrow([("S", table)])
@@ -298,7 +298,7 @@ class TestFromArrow(unittest.TestCase):
         )
 
     def test_encoding_follows_its_value_type(self):
-        """An encoding of a type with a text form is left behind as that."""
+        """An encoding of a scalar type is left behind as that type."""
         values = pa.array([23], pa.int64()).dictionary_encode()
         table = pa.Table.from_arrays([values], names=["a"])
         with self.assertRaises(ValueError):
@@ -320,7 +320,7 @@ class TestFromArrow(unittest.TestCase):
                 )
 
     def test_text_form(self):
-        """A value left behind keeps its text, and a missing one is empty."""
+        """A value keeps its text; a missing one comes back empty."""
         table = column([23, None], pa.int64())
         self.assertEqual(
             arrow.from_arrow([("S", table)], errors="ignore"),

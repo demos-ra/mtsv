@@ -1,9 +1,11 @@
 """Convert between MTSV sheets and Apache Arrow tables.
 
-The module exports from_arrow and to_arrow.
+Functions:
+to_arrow -- create (sheet name, table) pairs from MTSV sheets
+from_arrow -- create MTSV sheets from (sheet name, table) pairs
 """
 
-__all__ = ["from_arrow", "to_arrow"]
+__all__ = ["to_arrow", "from_arrow"]
 
 from typing import Any
 
@@ -30,6 +32,14 @@ _SCALAR = (
 _ENCODINGS = (pa.types.is_dictionary, pa.types.is_run_end_encoded)
 
 
+def to_arrow(
+    obj: list[dict[str, Any]], /
+) -> list[tuple[str | None, pa.Table]]:
+    """Create (sheet name, Arrow table) pairs from MTSV sheets."""
+    mtsv.dumps(obj)
+    return [(sheet["sheet name"], _table(sheet)) for sheet in obj]
+
+
 def from_arrow(
     tables: list[tuple[str | None, pa.Table]],
     /,
@@ -52,12 +62,16 @@ def from_arrow(
     return sheets
 
 
-def to_arrow(
-    obj: list[dict[str, Any]], /
-) -> list[tuple[str | None, pa.Table]]:
-    """Create (sheet name, Arrow table) pairs from MTSV sheets."""
-    mtsv.dumps(obj)
-    return [(sheet["sheet name"], _table(sheet)) for sheet in obj]
+def _table(sheet: dict[str, Any]) -> pa.Table:
+    """Create a table whose columns are the header fields, as strings."""
+    header_fields = sheet["header"]
+    if header_fields is None:
+        return pa.Table.from_arrays([], names=[])
+    columns = [
+        pa.array([fields[index] for fields in sheet["records"]], pa.string())
+        for index in range(len(header_fields))
+    ]
+    return pa.Table.from_arrays(columns, names=header_fields)
 
 
 def _sheet(
@@ -133,15 +147,3 @@ def _cast(column: pa.ChunkedArray) -> pa.ChunkedArray:
             for value in column.to_pylist()
         ]
         return pa.chunked_array([pa.array(values, pa.string())])
-
-
-def _table(sheet: dict[str, Any]) -> pa.Table:
-    """Create a table whose columns are the header fields, as strings."""
-    header_fields = sheet["header"]
-    if header_fields is None:
-        return pa.Table.from_arrays([], names=[])
-    columns = [
-        pa.array([fields[index] for fields in sheet["records"]], pa.string())
-        for index in range(len(header_fields))
-    ]
-    return pa.Table.from_arrays(columns, names=header_fields)
