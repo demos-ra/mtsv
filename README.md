@@ -32,8 +32,9 @@ version is the `version` field of
 
 ## Status
 
-Python implementation with ODS and Apache Arrow integrations. Not yet released
-on PyPI. Versions follow [Semantic Versioning](https://semver.org).
+Python implementation with ODS and Apache Arrow integrations, released on PyPI
+as [mtsv](https://pypi.org/project/mtsv/). Versions follow
+[Semantic Versioning](https://semver.org).
 
 ## License
 

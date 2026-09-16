@@ -9,20 +9,26 @@ version is the `version` field of `pyproject.toml`.
 
 ## Install
 
-From the repository. A Python that an operating system manages does not
-accept packages directly, so install into a virtual environment. Run these
-from the root of the repository, one folder above this one:
-
 ```
-python3 -m venv .venv
-.venv/bin/pip install ./python
+pip install mtsv
 ```
 
 For the Arrow integration, which also installs pyarrow:
 
 ```
-.venv/bin/pip install "./python[arrow]"
+pip install "mtsv[arrow]"
 ```
+
+A Python that an operating system manages does not accept packages
+directly, so install into a virtual environment:
+
+```
+python3 -m venv .venv
+.venv/bin/pip install mtsv
+```
+
+To install from a clone instead, run the same commands from the root of
+the repository with `./python` in place of `mtsv`.
 
 ## Read and write MTSV
 
