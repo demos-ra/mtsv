@@ -104,6 +104,11 @@ def one_cell(content="<text:p>a</text:p>", attributes=STRING):
     return package(table(COLUMN + row(cell(content, attributes))))
 
 
+def one_value(value):
+    """Return the sheet a one-cell table of that value comes back as."""
+    return [{"sheet name": "S", "header": [value], "records": []}]
+
+
 def round_trip(value):
     """Dump value to ODS and load it back strictly."""
     buffer = io.BytesIO()
@@ -175,7 +180,7 @@ LEFT_BEHIND = [
     (
         "I-30",
         one_cell(attributes=STRING + " office:string-value='b'"),
-        [{"sheet name": "S", "header": ["b"], "records": []}],
+        one_value("b"),
     ),
     (
         "I-31",
@@ -183,7 +188,7 @@ LEFT_BEHIND = [
             "<text:p>3</text:p>",
             " office:value-type='float' office:value='3'",
         ),
-        [{"sheet name": "S", "header": ["3"], "records": []}],
+        one_value("3"),
     ),
     ("I-33", one_cell("<text:h>a</text:h>"), SHEET_A),
     (
@@ -207,6 +212,55 @@ LEFT_BEHIND = [
         "I-43",
         one_cell("<text:p>a<text:bookmark text:name='m'/></text:p>"),
         SHEET_A,
+    ),
+    (
+        "I-46",
+        one_cell(
+            "<text:p>2,500</text:p>",
+            " office:value-type='float' office:value='2500'",
+        ),
+        one_value("2500"),
+    ),
+    (
+        "I-47",
+        one_cell(
+            "<text:p>Jan-23</text:p>",
+            " office:value-type='date' office:date-value='2023-01-15'",
+        ),
+        one_value("2023-01-15"),
+    ),
+    (
+        "I-48",
+        one_cell(
+            "<text:p>12:30 PM</text:p>",
+            " office:value-type='time' office:time-value='PT12H30M00S'",
+        ),
+        one_value("PT12H30M00S"),
+    ),
+    (
+        "I-49",
+        one_cell(
+            "<text:p>TRUE</text:p>",
+            " office:value-type='boolean' office:boolean-value='true'",
+        ),
+        one_value("true"),
+    ),
+    (
+        "I-50",
+        one_cell(
+            "<text:p>25%</text:p>",
+            " office:value-type='percentage' office:value='0.25'",
+        ),
+        one_value("0.25"),
+    ),
+    (
+        "I-51",
+        one_cell(
+            "<text:p>$550,000</text:p>",
+            " office:value-type='currency' office:value='550000'"
+            " office:currency='USD'",
+        ),
+        one_value("550000"),
     ),
 ]
 
@@ -290,12 +344,17 @@ MAPPED = [
     (
         "I-37",
         one_cell("<text:p>  a <text:s/> b  </text:p>"),
-        [{"sheet name": "S", "header": ["a   b"], "records": []}],
+        one_value("a   b"),
     ),
     (
         "I-38",
         one_cell("<text:p>a<text:s text:c='2'/>b</text:p>"),
-        [{"sheet name": "S", "header": ["a  b"], "records": []}],
+        one_value("a  b"),
+    ),
+    (
+        "I-52",
+        one_cell("", " office:value-type='void'"),
+        [{"sheet name": "S", "header": None, "records": []}],
     ),
 ]
 
@@ -385,7 +444,7 @@ class TestDump(unittest.TestCase):
 
 
 class TestLoad(unittest.TestCase):
-    """Reading ODS: rows I-1 to I-45."""
+    """Reading ODS: rows I-1 to I-52."""
 
     def test_left_behind(self):
         """R3: strict refuses each extra, and ignore leaves it behind."""

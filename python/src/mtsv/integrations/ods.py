@@ -40,6 +40,10 @@ _BODY = "{" + _OFFICE + "}body"
 _SPREADSHEET = "{" + _OFFICE + "}spreadsheet"
 _VALUE_TYPE = "{" + _OFFICE + "}value-type"
 _STRING_VALUE = "{" + _OFFICE + "}string-value"
+_VALUE = "{" + _OFFICE + "}value"
+_DATE_VALUE = "{" + _OFFICE + "}date-value"
+_TIME_VALUE = "{" + _OFFICE + "}time-value"
+_BOOLEAN_VALUE = "{" + _OFFICE + "}boolean-value"
 _TABLE_TABLE = "{" + _TABLE + "}table"
 _NAME = "{" + _TABLE + "}name"
 _COLUMN = "{" + _TABLE + "}table-column"
@@ -70,6 +74,18 @@ _PARAGRAPH_CONTENT = (
     "{" + _TEXT + "}meta-field",
     "{" + _TEXT + "}span",
 )
+
+# The value attribute of each office:value-type, ODF 1.3, 19.389.
+_VALUE_ATTRIBUTES = {
+    "boolean": _BOOLEAN_VALUE,
+    "currency": _VALUE,
+    "date": _DATE_VALUE,
+    "float": _VALUE,
+    "percentage": _VALUE,
+    "string": _STRING_VALUE,
+    "time": _TIME_VALUE,
+    "void": None,
+}
 
 _HTAB = chr(0x09)
 _LF = chr(0x0A)
@@ -366,7 +382,7 @@ def _rows(
 
 
 def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
-    """Read a row's cell texts, without its trailing empty cells."""
+    """Read a row's cell values, without its trailing empty cells."""
     values: list[str] = []
     pending = 0
     for child in row:
@@ -389,19 +405,28 @@ def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
 
 
 def _cell_value(cell: ElementTree.Element, extras: set[str]) -> str:
-    """Read a cell's text, from office:string-value when it is given."""
-    is_string = cell.get(_VALUE_TYPE) == "string"
+    """Read a cell's value, from its value attribute, ODF 1.3, 19.389.
+
+    The paragraphs render the value, so a value type other than string
+    is left behind with the style that rendered it.
+    """
+    value_type = cell.get(_VALUE_TYPE)
+    holder = _VALUE_ATTRIBUTES.get(value_type)
+    value = None if holder is None else cell.get(holder)
     for key in cell.attrib:
         if key == _COLUMNS_REPEATED:
             continue
-        if is_string and key in (_VALUE_TYPE, _STRING_VALUE):
+        if key == _VALUE_TYPE and value_type in _VALUE_ATTRIBUTES:
+            continue
+        if key == holder and value is not None:
             continue
         extras.add(_prefixed(key))
     text = _cell_text(cell, extras)
-    value = cell.get(_STRING_VALUE)
-    if not is_string or value is None:
+    if value is None:
         return text
-    if text and text != value:
+    if value_type != "string":
+        extras.add(f"office:value-type {value_type}")
+    elif text and text != value:
         extras.add(_prefixed(_P))
     return value
 
