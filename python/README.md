@@ -30,6 +30,35 @@ python3 -m venv .venv
 To install from a clone instead, run the same commands from the root of
 the repository with `./python` in place of `mtsv`.
 
+## Convert files
+
+```
+mtsv book.xlsx book.mtsv
+mtsv book.mtsv book.ods
+```
+
+The file extensions name the formats, so any two of `.mtsv`, `.csv`,
+`.json`, `.ods` and `.xlsx` convert to one another. Options come
+before the operands, and `-` is standard input or standard output:
+
+```
+mtsv -e ignore book.xlsx book.mtsv
+mtsv book.xlsx -
+```
+
+The output file can also be named with `-o`, or `--output`:
+
+```
+mtsv -o book.mtsv book.xlsx
+```
+
+`-e ignore`, or `--errors ignore`, leaves behind whatever MTSV does not
+hold instead of stopping. A stream carries MTSV, because it has no file
+extension to name another format.
+
+Each integration also has a module form of the same conversion, limited
+to its own format, such as `python -m mtsv.integrations.ods`.
+
 ## Read and write MTSV
 
 Sheets are a list of dictionaries with `"sheet name"`, `"header"`, and
@@ -47,6 +76,39 @@ with open("book.mtsv", "wb") as file:
 ```
 
 `loads` and `dumps` work on strings.
+
+## JSON
+
+The same sheets, written as JSON (RFC 8259). This is the form the
+conformance results use, so a file written here is the file that sits
+beside every `.mtsv` file in the corpus.
+
+```python
+from mtsv.integrations import json
+
+with open("book.json", "wb") as file:
+    json.dump(sheets, file)
+
+with open("book.json", "rb") as file:
+    sheets = json.load(file)
+```
+
+## CSV
+
+```python
+from mtsv.integrations import csv
+
+with open("book.csv", "wb") as file:
+    csv.dump(sheets, file)
+
+with open("book.csv", "rb") as file:
+    sheets = csv.load(file)
+```
+
+CSV holds one table and has nowhere to record which sheet it came
+from, so it reads and writes the unnamed sheet — the same plane a TSV
+file holds. A file of more than one sheet, or whose sheet has a name,
+raises `ValueError`.
 
 ## Spreadsheets (ODS)
 

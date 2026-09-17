@@ -1,0 +1,98 @@
+"""Test mtsv.integrations.csv against RFC 4180 and RFC 7111.
+
+CSV holds one table, so the sheet it reads and writes is the unnamed
+sheet, which is the plane a TSV file holds.
+"""
+
+import io
+import unittest
+
+from mtsv.integrations import csv
+
+from support import load_json, paths
+
+SHEET = [{"sheet name": None, "header": ["a", "b"], "records": [["1", "2"]]}]
+BYTES = b"a,b\r\n1,2\r\n"
+
+
+class TestDump(unittest.TestCase):
+    """Writing CSV."""
+
+    def test_unnamed_sheet(self):
+        """RFC 4180, 2: a line ends with CRLF, the header first."""
+        buffer = io.BytesIO()
+        csv.dump(SHEET, buffer)
+        self.assertEqual(buffer.getvalue(), BYTES)
+
+    def test_no_sheets(self):
+        """A file of no sheets gives a file of no lines."""
+        buffer = io.BytesIO()
+        csv.dump([], buffer)
+        self.assertEqual(buffer.getvalue(), b"")
+
+    def test_more_than_one_sheet(self):
+        """CSV holds one table, so two sheets are refused."""
+        sheets = [
+            {"sheet name": None, "header": ["a"], "records": []},
+            {"sheet name": "S", "header": ["a"], "records": []},
+        ]
+        with self.assertRaises(ValueError):
+            csv.dump(sheets, io.BytesIO())
+
+    def test_named_sheet(self):
+        """CSV has nowhere for a sheet name, so it is refused."""
+        sheets = [{"sheet name": "S", "header": ["a"], "records": []}]
+        with self.assertRaises(ValueError):
+            csv.dump(sheets, io.BytesIO())
+
+    def test_quoting(self):
+        """RFC 4180, 6 and 7: quote a comma, double a quotation mark."""
+        sheets = [
+            {"sheet name": None, "header": ['a,b', 'c"d'], "records": []}
+        ]
+        buffer = io.BytesIO()
+        csv.dump(sheets, buffer)
+        self.assertEqual(buffer.getvalue(), b'"a,b","c""d"\r\n')
+
+    def test_cannot_be_represented(self):
+        """Each file that MTSV cannot hold is refused by dump."""
+        for path in paths("cannot-be-represented", ".json"):
+            with self.subTest(path.name):
+                with self.assertRaises(ValueError):
+                    csv.dump(load_json(path), io.BytesIO())
+
+
+class TestLoad(unittest.TestCase):
+    """Reading CSV."""
+
+    def test_round_trip(self):
+        """What dump writes, load reads back unchanged."""
+        self.assertEqual(csv.load(io.BytesIO(BYTES)), SHEET)
+
+    def test_line_feed_alone(self):
+        """RFC 7111, 5.1: an implementation may use other values."""
+        self.assertEqual(csv.load(io.BytesIO(b"a,b\n1,2\n")), SHEET)
+
+    def test_no_lines(self):
+        """A file of no lines gives a file of no sheets."""
+        self.assertEqual(csv.load(io.BytesIO(b"")), [])
+
+    def test_line_break_in_a_field(self):
+        """A field holding a line break cannot be held by MTSV."""
+        with self.assertRaises(ValueError):
+            csv.load(io.BytesIO(b'a\r\n"b\r\nc"\r\n'))
+
+    def test_field_count_must_match(self):
+        """A line with a different field count is refused."""
+        with self.assertRaises(ValueError):
+            csv.load(io.BytesIO(b"a,b\r\n1\r\n"))
+
+    def test_not_utf_8(self):
+        """A file that is not UTF-8 raises ValueError."""
+        with self.assertRaises(ValueError):
+            csv.load(io.BytesIO(b"\xff\xfe"))
+
+    def test_unknown_errors_value(self):
+        """An errors value that is neither name raises LookupError."""
+        with self.assertRaises(LookupError):
+            csv.load(io.BytesIO(BYTES), errors="replace")

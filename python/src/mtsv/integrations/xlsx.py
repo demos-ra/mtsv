@@ -8,16 +8,14 @@ main -- convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv
 
 __all__ = ["dump", "load", "main"]
 
-import argparse
-import io
 import zipfile
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any, BinaryIO
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
+from mtsv import _command
 
 _MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -147,30 +145,12 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> None:
     """Convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv."""
-    parser = argparse.ArgumentParser(
-        prog="python -m mtsv.integrations.xlsx",
-        description="Convert a .mtsv file to .xlsx, or .xlsx to .mtsv.",
+    _command.run(
+        "python -m mtsv.integrations.xlsx",
+        "Convert a .mtsv file to .xlsx, or .xlsx to .mtsv.",
+        {".xlsx": (load, dump)},
+        argv,
     )
-    parser.add_argument("input", type=Path)
-    parser.add_argument("output", type=Path)
-    parser.add_argument(
-        "--errors", choices=["strict", "ignore"], default="strict"
-    )
-    args = parser.parse_args(argv)
-    suffixes = (args.input.suffix, args.output.suffix)
-    buffer = io.BytesIO()
-    try:
-        if suffixes == (".mtsv", ".xlsx"):
-            with args.input.open("rb") as source:
-                dump(mtsv.load(source), buffer)
-        elif suffixes == (".xlsx", ".mtsv"):
-            with args.input.open("rb") as source:
-                mtsv.dump(load(source, args.errors), buffer)
-        else:
-            parser.error("convert a .mtsv file to .xlsx, or .xlsx to .mtsv")
-    except ValueError as error:
-        raise SystemExit(error)
-    args.output.write_bytes(buffer.getvalue())
 
 
 def _lines(sheet: dict[str, Any]) -> list[list[str]]:

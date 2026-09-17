@@ -8,18 +8,16 @@ main -- convert a .mtsv file to .ods, or an .ods file to .mtsv
 
 __all__ = ["dump", "load", "main"]
 
-import argparse
-import io
 import re
 import zipfile
 from collections.abc import Iterator
 from itertools import groupby
-from pathlib import Path
 from typing import Any, BinaryIO
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
+from mtsv import _command
 
 _MEDIA_TYPE = "application/vnd.oasis.opendocument.spreadsheet"
 _PACKAGE_FILES = ("mimetype", "META-INF/manifest.xml", "content.xml")
@@ -158,30 +156,12 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
 
 def main(argv: list[str] | None = None) -> None:
     """Convert a .mtsv file to .ods, or an .ods file to .mtsv."""
-    parser = argparse.ArgumentParser(
-        prog="python -m mtsv.integrations.ods",
-        description="Convert a .mtsv file to .ods, or an .ods file to .mtsv.",
+    _command.run(
+        "python -m mtsv.integrations.ods",
+        "Convert a .mtsv file to .ods, or an .ods file to .mtsv.",
+        {".ods": (load, dump)},
+        argv,
     )
-    parser.add_argument("input", type=Path)
-    parser.add_argument("output", type=Path)
-    parser.add_argument(
-        "--errors", choices=["strict", "ignore"], default="strict"
-    )
-    args = parser.parse_args(argv)
-    suffixes = (args.input.suffix, args.output.suffix)
-    buffer = io.BytesIO()
-    try:
-        if suffixes == (".mtsv", ".ods"):
-            with args.input.open("rb") as source:
-                dump(mtsv.load(source), buffer)
-        elif suffixes == (".ods", ".mtsv"):
-            with args.input.open("rb") as source:
-                mtsv.dump(load(source, args.errors), buffer)
-        else:
-            parser.error("convert a .mtsv file to .ods, or .ods to .mtsv")
-    except ValueError as error:
-        raise SystemExit(error)
-    args.output.write_bytes(buffer.getvalue())
 
 
 def _manifest() -> str:

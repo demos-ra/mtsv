@@ -17,5 +17,8 @@ keywords = ["tsv", "tabular data", "media type"]
 source = "https://github.com/demos-ra/mtsv"
 issues = "https://github.com/demos-ra/mtsv/issues"
 
+[project.scripts]
+mtsv = "mtsv.__main__:main"
+
 [project.optional-dependencies]
 arrow = ["pyarrow>=16"]
