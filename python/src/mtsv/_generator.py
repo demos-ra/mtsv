@@ -1,38 +1,19 @@
-"""Generate MTSV text, following draft-demosra-mtsv-00, Section 6."""
+"""Generate MTSV text, following draft-demosra-mtsv-01, Section 6."""
 
 from typing import Any
 
 HTAB = chr(0x09)
 LF = chr(0x0A)
 FF = chr(0x0C)
-SIGNATURE = chr(0xFEFF)
 
 
 def mtsv_file(sheets: list[dict[str, Any]]) -> str:
-    """Generate: mtsv-file = unnamed-sheet *named-sheet."""
-    parts: list[str] = []
-    for index, sheet in enumerate(sheets):
-        if sheet["sheet name"] is None:
-            parts.append(unnamed_sheet(sheet, index))
-        else:
-            parts.append(named_sheet(sheet))
-    return "".join(parts)
+    """Generate: mtsv-file = first-sheet *named-sheet.
 
-
-def unnamed_sheet(sheet: dict[str, Any], index: int) -> str:
-    """Generate: unnamed-sheet = sheet-body."""
-    if index != 0 or sheet["header"] is None:
-        raise ValueError(
-            "an MTSV file has an unnamed sheet only if the file contains"
-            " at least one line before the first FF"
-        )
-    if sheet["header"] and sheet["header"][0].startswith(SIGNATURE):
-        raise ValueError(
-            "the first field of the unnamed sheet cannot begin with U+FEFF,"
-            " because a parser treats that character as an encoding"
-            " signature"
-        )
-    return sheet_body(sheet)
+    Write an FF line before every sheet, so first-sheet is empty
+    (Section 6).
+    """
+    return "".join(named_sheet(sheet) for sheet in sheets)
 
 
 def named_sheet(sheet: dict[str, Any]) -> str:
@@ -87,6 +68,8 @@ def field(value: str) -> str:
 
 def sheet_name(value: str) -> str:
     """Generate: sheet-name = *field-char."""
+    if not isinstance(value, str):
+        raise ValueError("every sheet has a sheet name")
     if not all(field_char(char) for char in value):
         raise ValueError(
             "a field or sheet name that contains HT, LF, FF, or CR"

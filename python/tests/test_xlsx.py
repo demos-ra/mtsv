@@ -5,6 +5,7 @@ file, I-n for reading one.
 """
 
 import io
+import logging
 import tempfile
 import unittest
 import zipfile
@@ -29,9 +30,21 @@ WORKSHEET_TYPE = (
 )
 OFFICE_DOCUMENT_REL = R + "/officeDocument"
 WORKSHEET_REL = R + "/worksheet"
+SHARED_STRINGS_REL = R + "/sharedStrings"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 
 SHEET_A = [{"sheet name": "S", "header": ["a"], "records": []}]
 FORBIDDEN = (chr(0x00), chr(0x08), chr(0x0B), chr(0x0E))
+XML_FORBIDDEN = {
+    "field-u0000",
+    "field-u0008",
+    "field-u000b",
+    "field-u000e",
+    "sheet-name-u0000",
+    "sheet-name-u0008",
+    "sheet-name-u000b",
+    "sheet-name-u000e",
+}
 
 
 def content_types(count):
@@ -59,13 +72,18 @@ def root_relationships():
     )
 
 
-def workbook_relationships(count):
+def workbook_relationships(count, table=False, prefix=""):
     """Return xl/_rels/workbook.xml.rels for that many worksheets."""
     entries = "".join(
         f"<Relationship Id='rId{index}' Type='{WORKSHEET_REL}'"
-        f" Target='worksheets/sheet{index}.xml'/>"
+        f" Target='{prefix}worksheets/sheet{index}.xml'/>"
         for index in range(1, count + 1)
     )
+    if table:
+        entries += (
+            f"<Relationship Id='rId{count + 1}' Type='{SHARED_STRINGS_REL}'"
+            " Target='sharedStrings.xml'/>"
+        )
     return f"<Relationships xmlns='{RELATIONSHIPS}'>{entries}</Relationships>"
 
 
@@ -86,10 +104,10 @@ def workbook(entries=None, children=""):
     )
 
 
-def worksheet(rows="", children=""):
+def worksheet(rows="", children="", attributes=""):
     """Return a worksheet part holding the given rows."""
     return (
-        f"<worksheet xmlns='{MAIN}'>{children}"
+        f"<worksheet xmlns='{MAIN}'{attributes}>{children}"
         f"<sheetData>{rows}</sheetData></worksheet>"
     )
 
@@ -112,7 +130,9 @@ def strings(items):
     return f"<sst xmlns='{MAIN}'>{items}</sst>"
 
 
-def package(sheets=None, entries=None, children="", table=None, extra=()):
+def package(
+    sheets=None, entries=None, children="", table=None, extra=(), prefix=""
+):
     """Return an .xlsx file, as bytes, holding the given parts."""
     sheets = [worksheet(row())] if sheets is None else sheets
     buffer = io.BytesIO()
@@ -121,7 +141,8 @@ def package(sheets=None, entries=None, children="", table=None, extra=()):
         file.writestr("_rels/.rels", root_relationships())
         file.writestr("xl/workbook.xml", workbook(entries, children))
         file.writestr(
-            "xl/_rels/workbook.xml.rels", workbook_relationships(len(sheets))
+            "xl/_rels/workbook.xml.rels",
+            workbook_relationships(len(sheets), table is not None, prefix),
         )
         for index, part in enumerate(sheets, 1):
             file.writestr(f"xl/worksheets/sheet{index}.xml", part)
@@ -146,10 +167,8 @@ def round_trip(value):
 
 
 def refused(value):
-    """Return whether XLSX cannot hold these sheets, per O-3, O-4."""
-    return not value or any(
-        entry["sheet name"] is None for entry in value
-    )
+    """Return whether XLSX cannot hold these sheets, per O-4."""
+    return not value
 
 
 LEFT_BEHIND = [
@@ -166,6 +185,11 @@ LEFT_BEHIND = [
     (
         "I-6",
         package([worksheet(row(), "<dimension ref='A1'/>")]),
+        SHEET_A,
+    ),
+    (
+        "I-6 root attribute",
+        package([worksheet(row(), attributes=" x='1'")]),
         SHEET_A,
     ),
     (
@@ -284,11 +308,44 @@ MAPPED = [
         ),
         [{"sheet name": "S", "header": ["a", ""], "records": []}],
     ),
+    ("I-1 absolute target", package(prefix="/xl/"), SHEET_A),
+    (
+        "I-6 compatibility attribute",
+        package(
+            [
+                worksheet(
+                    row(), attributes=f" xmlns:mc='{MC}' mc:Ignorable=''"
+                )
+            ]
+        ),
+        SHEET_A,
+    ),
+    (
+        "I-9 reversed",
+        package([worksheet(row(cell("<is><t>b</t></is>", "B1") + cell()))]),
+        [{"sheet name": "S", "header": ["a", "b"], "records": []}],
+    ),
 ]
 
 ALWAYS = [
     ("I-2 not a zip", b"not a zip"),
+    ("I-1 target with a scheme", package(prefix="http://example.com/")),
     ("I-2 no workbook", package(extra=["extra.xml"])[:20]),
+    ("I-9 column twice", package([worksheet(row(cell() + cell()))])),
+    (
+        "I-11 index past the table",
+        package(
+            [worksheet(row(cell("<v>1</v>", attributes=" t='s'")))],
+            table=strings("<si><t>a</t></si>"),
+        ),
+    ),
+    (
+        "I-11 negative index",
+        package(
+            [worksheet(row(cell("<v>-1</v>", attributes=" t='s'")))],
+            table=strings("<si><t>a</t></si>"),
+        ),
+    ),
     (
         "I-44 sheet name",
         package(entries=sheet(name="S&#9;S")),
@@ -304,7 +361,7 @@ class TestDump(unittest.TestCase):
         for path in paths("conforming", ".json"):
             with self.subTest(path.name):
                 value = load_json(path)
-                if refused(value):
+                if path.stem in XML_FORBIDDEN or refused(value):
                     with self.assertRaises(ValueError):
                         xlsx.dump(value, io.BytesIO())
                 else:
@@ -316,12 +373,6 @@ class TestDump(unittest.TestCase):
             with self.subTest(path.name):
                 with self.assertRaises(ValueError):
                     xlsx.dump(load_json(path), io.BytesIO())
-
-    def test_unnamed_sheet(self):
-        """O-3: a sheet without a name cannot be represented."""
-        value = [{"sheet name": None, "header": ["a"], "records": []}]
-        with self.assertRaises(ValueError):
-            xlsx.dump(value, io.BytesIO())
 
     def test_no_sheets(self):
         """O-4: a file of no sheets cannot be represented."""
@@ -365,6 +416,7 @@ class TestDump(unittest.TestCase):
                     "_rels/.rels",
                     "xl/workbook.xml",
                     "xl/_rels/workbook.xml.rels",
+                    "xl/sharedStrings.xml",
                     "xl/worksheets/sheet1.xml",
                     "xl/worksheets/sheet2.xml",
                 ],
@@ -375,7 +427,7 @@ class TestLoad(unittest.TestCase):
     """Reading XLSX: rows I-1 to I-18."""
 
     def test_left_behind(self):
-        """R3: strict refuses each extra, and ignore leaves it behind."""
+        """R3: strict refuses each extra; ignore leaves it behind."""
         for row_id, data, expected in LEFT_BEHIND:
             with self.subTest(row_id):
                 with self.assertRaises(ValueError):
@@ -418,15 +470,16 @@ class TestMain(unittest.TestCase):
             xlsx.main([str(book), str(back)])
             self.assertEqual(back.read_bytes(), original.read_bytes())
 
-    def test_extras_need_the_errors_option(self):
-        """R6: extras stop the conversion without --errors ignore."""
+    def test_extras_are_reported_not_refused(self):
+        """R6: extras are noted, and --errors strict refuses them."""
         data = package(entries=sheet(attributes=" state='hidden'"))
         expected = bytes([0x0C]) + b"S" + bytes([0x0A]) + b"a" + bytes([0x0A])
         with tempfile.TemporaryDirectory() as directory:
             book = Path(directory, "hidden.xlsx")
             result = Path(directory, "hidden.mtsv")
             book.write_bytes(data)
-            with self.assertRaises(SystemExit):
+            with self.assertLogs("mtsv.integrations", logging.WARNING):
                 xlsx.main([str(book), str(result)])
-            xlsx.main([str(book), str(result), "--errors", "ignore"])
             self.assertEqual(result.read_bytes(), expected)
+            with self.assertRaises(SystemExit):
+                xlsx.main([str(book), str(result), "--errors", "strict"])

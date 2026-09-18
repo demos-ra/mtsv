@@ -11,17 +11,17 @@ import json
 from typing import Any, BinaryIO
 
 import mtsv
+import mtsv.integrations
 
 # RFC 8259, Section 8.1: JSON text exchanged between systems that are
-# not part of a closed ecosystem MUST be encoded using UTF-8, and an
-# implementation MUST NOT add a byte order mark. The same section lets
-# a parser ignore one, which decoding as utf-8-sig does.
+# not part of a closed ecosystem MUST be encoded using UTF-8; an
+# implementation MUST NOT add a byte order mark, and a parser MAY
+# ignore one.
 _WRITE = "utf-8"
 _READ = "utf-8-sig"
 
-# The conformance corpus writes the result of a parse with no white
-# space except one final line feed, so the same sheets give the same
-# bytes as the .json file beside every .mtsv file.
+# conformance/README.md: each result is written with no white space
+# except one final line feed.
 _SEPARATORS = (",", ":")
 
 # The members of a sheet, draft-demosra-mtsv-00, Section 3.
@@ -45,18 +45,14 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     would be left behind. With errors="ignore", leave it behind. Raise
     ValueError for a file that is not JSON in the shape of sheets.
     """
-    if errors not in ("strict", "ignore"):
-        raise LookupError(f"unknown error handler name {errors!r}")
+    mtsv.integrations._errors(errors)
     extras: set[str] = set()
     try:
         value = json.loads(fp.read().decode(_READ))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("the file is not JSON") from error
     sheets = [_sheet(entry, extras) for entry in _array(value)]
-    if errors == "strict" and extras:
-        raise ValueError(
-            "these would be left behind: " + ", ".join(sorted(extras))
-        )
+    mtsv.integrations.report(extras, errors)
     mtsv.dumps(sheets)
     return sheets
 
@@ -74,7 +70,7 @@ def _sheet(entry: Any, extras: set[str]) -> dict[str, Any]:
     name = entry["sheet name"]
     header = entry["header"]
     return {
-        "sheet name": None if name is None else _text(name),
+        "sheet name": _text(name),
         "header": None if header is None else _fields(header),
         "records": [_fields(line) for line in _array(entry["records"])],
     }

@@ -8,17 +8,13 @@ __all__ = ["run"]
 
 import argparse
 import io
+import logging
 import sys
-from collections.abc import Callable
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import Any
 
-import mtsv
-
-# Every conversion passes through MTSV. Its media type registration
-# declares the extension .mtsv, in draft-demosra-mtsv-00, Section 9.1.
-_MTSV = ".mtsv"
+import mtsv.integrations
 
 # Guideline 13 of POSIX.1-2017 XBD 12.2: the operand "-" means
 # standard input, or standard output where an output file is meant.
@@ -28,14 +24,13 @@ _STDIO = Path("-")
 def run(
     prog: str,
     description: str,
-    integrations: dict[str, tuple[Callable, Callable]],
+    suffixes: tuple[str, ...],
     argv: list[str] | None = None,
 ) -> None:
     """Convert the input file to the output file, by their extensions.
 
-    Each integration is named by the file extension of its format and
-    holds that format's load and dump functions. MTSV is a format of
-    every conversion, so it is never named in integrations.
+    The suffixes are the file extensions this invocation converts,
+    besides MTSV itself.
     """
     parser = argparse.ArgumentParser(
         prog=prog,
@@ -46,8 +41,10 @@ def run(
     parser.add_argument("input", type=Path)
     parser.add_argument("operand", type=Path, nargs="?", metavar="output")
     parser.add_argument("-o", "--output", type=Path)
+    # Python logging HOWTO, 336-340: WARNING, "The software is still
+    # working as expected."
     parser.add_argument(
-        "-e", "--errors", choices=["strict", "ignore"], default="strict"
+        "-e", "--errors", choices=["strict", "ignore"], default="ignore"
     )
     parser.add_argument("--version", action="version", version=_notice())
     args = parser.parse_args(argv)
@@ -55,19 +52,30 @@ def run(
         parser.error("give the output file once, as an operand or with -o")
     output = args.operand if args.output is None else args.output
     if output is None:
-        parser.error("an output file is required")
-    formats = (_MTSV, *sorted(integrations))
+        output = _derive(args.input, parser)
+    formats = (mtsv.integrations.MTSV, *sorted(suffixes))
     source = _format(args.input)
     target = _format(output)
     if source not in formats or target not in formats:
         names = ", ".join(formats)
         parser.error(f"the file extensions must be two of {names}")
+    # Python logging HOWTO, 1335-1340: the configuration of handlers is
+    # the prerogative of the application developer. GNU Coding
+    # Standards 4.4 gives the format.
+    logging.basicConfig(format=f"{prog}: %(message)s", force=True)
     try:
-        sheets = _read(source, args.input, integrations, args.errors)
-        data = _write(target, sheets, integrations)
+        sheets = _read(source, args.input, args.errors)
+        data = _write(target, sheets)
+        _put(output, data)
     except ValueError as error:
-        raise SystemExit(error)
-    _put(output, data)
+        # GNU Coding Standards 4.4: a message from a noninteractive
+        # program reads "PROGRAM: MESSAGE" where no source file is
+        # relevant, and does not begin with a capital or end with a
+        # full stop.
+        raise SystemExit(f"{prog}: {error}")
+    except OSError as error:
+        reason = error.strerror[:1].lower() + error.strerror[1:]
+        raise SystemExit(f"{prog}: {error.filename}: {reason}")
 
 
 def _notice() -> str:
@@ -92,9 +100,8 @@ def _notice() -> str:
 def _epilog() -> str:
     """Return the closing lines of GNU Coding Standards 4.8.2.
 
-    That section asks for the address for bug reports and the home
-    page of the package. Line 1021 permits other web pages, which is
-    how a tracker stands in for a mailing address.
+    Lines 1012-1018: the address for bug reports and the home page.
+    Line 1021: other web pages are ok.
     """
     urls = {}
     for entry in metadata("mtsv").get_all("Project-URL", []):
@@ -106,61 +113,53 @@ def _epilog() -> str:
     )
 
 
+def _derive(path: Path, parser: argparse.ArgumentParser) -> Path:
+    """Return the MTSV file a lone input operand converts to.
+
+    The operand stays required wherever that name cannot be formed.
+    """
+    if path == _STDIO:
+        parser.error("an output file is required to read standard input")
+    if path.suffix == mtsv.integrations.MTSV:
+        parser.error("an output file is required to convert from MTSV")
+    return path.with_suffix(mtsv.integrations.MTSV)
+
+
 def _format(path: Path) -> str:
     """Return the file extension that names a path's format.
 
-    A stream carries no extension, so it carries the format that
-    every conversion passes through. Pandoc reads a stream as its own
-    central format for the same reason, in lines 89 to 94 of its
-    manual.
+    A stream has the MTSV format. Pandoc manual, 92-94: input from
+    stdin is assumed to be Markdown.
     """
     if path == _STDIO:
-        return _MTSV
+        return mtsv.integrations.MTSV
     return path.suffix
 
 
-def _read(
-    source: str,
-    path: Path,
-    integrations: dict[str, tuple[Callable, Callable]],
-    errors: str,
-) -> list[dict[str, Any]]:
+def _read(source: str, path: Path, errors: str) -> list[dict[str, Any]]:
     """Read sheets from a file, or from standard input.
 
-    The bytes are read whole because a spreadsheet package is a zip
-    file, which seeks, and standard input cannot seek.
+    The bytes are read whole.
     """
     if path == _STDIO:
         data = sys.stdin.buffer.read()
     else:
         data = path.read_bytes()
     with io.BytesIO(data) as fp:
-        if source == _MTSV:
-            return mtsv.load(fp)
-        load, _ = integrations[source]
-        return load(fp, errors=errors)
+        return mtsv.integrations.load(source, fp, errors=errors)
 
 
-def _write(
-    target: str,
-    sheets: list[dict[str, Any]],
-    integrations: dict[str, tuple[Callable, Callable]],
-) -> bytes:
+def _write(target: str, sheets: list[dict[str, Any]]) -> bytes:
     """Return the sheets written in the format of a file extension."""
     with io.BytesIO() as fp:
-        if target == _MTSV:
-            mtsv.dump(sheets, fp)
-        else:
-            _, dump = integrations[target]
-            dump(sheets, fp)
+        mtsv.integrations.dump(target, sheets, fp)
         return fp.getvalue()
 
 
 def _put(path: Path, data: bytes) -> None:
     """Write bytes to a file, or to standard output.
 
-    The bytes are written in one call, so that a conversion which
-    stops partway leaves no output behind.
+    The bytes are written in one call.
     """
     if path == _STDIO:
         sys.stdout.buffer.write(data)

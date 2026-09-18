@@ -1,7 +1,14 @@
 """Shared helpers for the tests: the conformance files."""
 
 import json
+import logging
 from pathlib import Path
+
+# Python logging HOWTO, 1302-1309: a library adds a NullHandler where
+# its events should not be printed without configuration.
+_LOGGER = logging.getLogger("mtsv")
+_LOGGER.addHandler(logging.NullHandler())
+_LOGGER.propagate = False
 
 CONFORMANCE = Path(__file__).resolve().parents[2] / "conformance"
 

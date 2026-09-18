@@ -1,4 +1,4 @@
-"""Test the mtsv interface: argument types and pickling of errors."""
+"""Test the mtsv interface: argument types, sheet names, and errors."""
 
 import io
 import pickle
@@ -26,6 +26,16 @@ class TestLoad(unittest.TestCase):
             mtsv.loads(s="a\n")
         with self.assertRaises(TypeError):
             mtsv.load(fp=io.BytesIO(b"a\n"))
+
+
+class TestDumps(unittest.TestCase):
+    """dumps, which writes the data model of Section 3."""
+
+    def test_sheet_name_is_text(self):
+        """A sheet name that is not text raises ValueError."""
+        sheets = [{"sheet name": None, "header": ["a"], "records": []}]
+        with self.assertRaises(ValueError):
+            mtsv.dumps(sheets)
 
 
 class TestMTSVDecodeError(unittest.TestCase):

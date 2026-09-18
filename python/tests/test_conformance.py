@@ -7,6 +7,8 @@ import mtsv
 
 from support import load_json, paths
 
+FF = chr(0x0C)
+
 
 class TestConforming(unittest.TestCase):
     """Conforming files: parse to their JSON, generate back from it."""
@@ -25,6 +27,16 @@ class TestConforming(unittest.TestCase):
             with self.subTest(path.name):
                 value = load_json(path)
                 self.assertEqual(mtsv.loads(mtsv.dumps(value)), value)
+
+    def test_generate_writes_ff_lines(self):
+        """Each generated file has an FF line before every sheet."""
+        for path in paths("conforming", ".json"):
+            with self.subTest(path.name):
+                value = load_json(path)
+                text = mtsv.dumps(value)
+                self.assertEqual(text.count(FF), len(value))
+                if value:
+                    self.assertTrue(text.startswith(FF))
 
     def test_dump_encodes_utf_8(self):
         """dump writes the dumps string encoded as UTF-8."""

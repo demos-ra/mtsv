@@ -26,7 +26,7 @@ ARROW_LEAVES_BEHIND = {
 
 
 def scalar_types():
-    """The types whose slots hold one scalar, and so have a text form."""
+    """Types whose slots hold one scalar, and so have a text form."""
     return {
         "null": pa.null(),
         "boolean": pa.bool_(),
@@ -186,12 +186,17 @@ class TestFromArrow(unittest.TestCase):
                         with self.assertRaises(ValueError):
                             arrow.from_arrow(pairs, errors=errors)
 
-    def test_unnamed_pair(self):
-        """A pair named None gives the unnamed sheet."""
+    def test_empty_name(self):
+        """An empty name gives a sheet whose sheet name is empty."""
         self.assertEqual(
-            arrow.from_arrow([(None, column(["x"]))]),
-            [{"sheet name": None, "header": ["a"], "records": [["x"]]}],
+            arrow.from_arrow([("", column(["x"]))]),
+            [{"sheet name": "", "header": ["a"], "records": [["x"]]}],
         )
+
+    def test_name_is_text(self):
+        """A pair named None is refused, as every sheet has a name."""
+        with self.assertRaises(ValueError):
+            arrow.from_arrow([(None, column(["x"]))])
 
     def test_table_without_columns(self):
         """A table without columns gives an empty sheet."""

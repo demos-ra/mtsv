@@ -11,8 +11,8 @@ from mtsv.integrations import json
 
 from support import load_json, paths
 
-SHEET = b'[{"sheet name":null,"header":["a"],"records":[]}]'
-EXPECTED = [{"sheet name": None, "header": ["a"], "records": []}]
+SHEET = b'[{"sheet name":"","header":["a"],"records":[]}]'
+EXPECTED = [{"sheet name": "", "header": ["a"], "records": []}]
 
 
 class TestDump(unittest.TestCase):
@@ -56,7 +56,7 @@ class TestLoad(unittest.TestCase):
 
     def test_member_outside_the_data_model(self):
         """A member outside the three is left behind, not kept."""
-        data = b'[{"sheet name":null,"header":["a"],"records":[],"x":1}]'
+        data = b'[{"sheet name":"","header":["a"],"records":[],"x":1}]'
         with self.assertRaises(ValueError):
             json.load(io.BytesIO(data))
         self.assertEqual(
@@ -65,20 +65,26 @@ class TestLoad(unittest.TestCase):
 
     def test_a_field_is_a_string(self):
         """A field that is not a JSON string raises ValueError."""
-        data = b'[{"sheet name":null,"header":[1],"records":[]}]'
+        data = b'[{"sheet name":"","header":[1],"records":[]}]'
+        with self.assertRaises(ValueError):
+            json.load(io.BytesIO(data))
+
+    def test_a_sheet_name_is_a_string(self):
+        """A sheet name that is not a JSON string raises ValueError."""
+        data = b'[{"sheet name":null,"header":["a"],"records":[]}]'
         with self.assertRaises(ValueError):
             json.load(io.BytesIO(data))
 
     def test_a_sheet_has_every_member(self):
         """A sheet missing one of the three raises ValueError."""
-        data = b'[{"sheet name":null,"header":["a"]}]'
+        data = b'[{"sheet name":"","header":["a"]}]'
         with self.assertRaises(ValueError):
             json.load(io.BytesIO(data))
 
     def test_sheets_are_an_array(self):
         """A document that is not an array raises ValueError."""
         with self.assertRaises(ValueError):
-            json.load(io.BytesIO(b'{"sheet name":null}'))
+            json.load(io.BytesIO(b'{"sheet name":""}'))
 
     def test_unknown_errors_value(self):
         """An errors value that is neither name raises LookupError."""

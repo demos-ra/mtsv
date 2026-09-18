@@ -17,7 +17,9 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
+import mtsv.integrations
 from mtsv import _command
+from mtsv.integrations import _xml
 
 _MEDIA_TYPE = "application/vnd.oasis.opendocument.spreadsheet"
 _PACKAGE_FILES = ("mimetype", "META-INF/manifest.xml", "content.xml")
@@ -101,16 +103,7 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     name holds a character that XML 1.0 does not allow.
     """
     mtsv.dumps(obj)
-    for sheet in obj:
-        values = [sheet["sheet name"] or ""]
-        for fields in [sheet["header"] or [], *sheet["records"]]:
-            values.extend(fields)
-        for value in values:
-            if not all(_xml_char(char) for char in value):
-                raise ValueError(
-                    "a field or sheet name that contains a character not"
-                    " allowed in XML 1.0 cannot be represented in ODS"
-                )
+    _xml.check_chars(obj, "ODS")
     with zipfile.ZipFile(fp, "w") as package:
         package.writestr(
             zipfile.ZipInfo("mimetype"), _MEDIA_TYPE, zipfile.ZIP_STORED
@@ -134,8 +127,7 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     would be left behind. With errors="ignore", leave it behind. Raise
     ValueError for a file that is not an ODF spreadsheet.
     """
-    if errors not in ("strict", "ignore"):
-        raise LookupError(f"unknown error handler name {errors!r}")
+    mtsv.integrations._errors(errors)
     extras: set[str] = set()
     try:
         with zipfile.ZipFile(fp) as package:
@@ -146,10 +138,7 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as error:
         raise ValueError("the file is not an ODF package") from error
     sheets = _spreadsheet(root, extras)
-    if errors == "strict" and extras:
-        raise ValueError(
-            "these would be left behind: " + ", ".join(sorted(extras))
-        )
+    mtsv.integrations.report(extras, errors)
     mtsv.dumps(sheets)
     return sheets
 
@@ -159,7 +148,7 @@ def main(argv: list[str] | None = None) -> None:
     _command.run(
         "python -m mtsv.integrations.ods",
         "Convert a .mtsv file to .ods, or an .ods file to .mtsv.",
-        {".ods": (load, dump)},
+        (".ods",),
         argv,
     )
 
@@ -196,8 +185,7 @@ def _document_content(sheets: list[dict[str, Any]]) -> str:
 
 def _table(sheet: dict[str, Any]) -> str:
     """Generate table:table; an empty sheet gets one empty cell."""
-    name = sheet["sheet name"]
-    attribute = "" if name is None else " table:name=" + quoteattr(name)
+    attribute = " table:name=" + quoteattr(sheet["sheet name"])
     if sheet["header"] is None:
         rows = [[""]]
     else:
@@ -231,7 +219,7 @@ def _paragraph(value: str) -> str:
     """Generate text:p content, with spaces marked per ODF 6.1.2-6.1.3.
 
     A single space between other characters stays a space; every other
-    space is written with text:s, so collapsing cannot remove it.
+    space is written with text:s.
     """
     groups = [
         (is_space, "".join(chars))
@@ -253,39 +241,6 @@ def _paragraph(value: str) -> str:
     return "".join(parts)
 
 
-def _xml_char(char: str) -> bool:
-    """Match XML 1.0 Char.
-
-    Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
-             | [#x10000-#x10FFFF]
-    """
-    code = ord(char)
-    return (
-        code in (0x09, 0x0A, 0x0D)
-        or 0x20 <= code <= 0xD7FF
-        or 0xE000 <= code <= 0xFFFD
-        or 0x10000 <= code <= 0x10FFFF
-    )
-
-
-def _prefixed(name: str) -> str:
-    """Return {namespace}local as prefix:local for known prefixes."""
-    if not name.startswith("{"):
-        return name
-    namespace, local = name[1:].split("}", 1)
-    prefix = _PREFIXES.get(namespace)
-    return name if prefix is None else f"{prefix}:{local}"
-
-
-def _note_attributes(
-    element: ElementTree.Element, allowed: tuple[str, ...], extras: set[str]
-) -> None:
-    """Record each attribute outside the MTSV mapping as left behind."""
-    for key in element.attrib:
-        if key not in allowed:
-            extras.add(_prefixed(key))
-
-
 def _count(value: str, minimum: int) -> int:
     """Read a positiveInteger (minimum 1) or nonNegativeInteger (0)."""
     digits = value.strip(_XML_SPACE)
@@ -300,20 +255,20 @@ def _spreadsheet(
     """Parse office:document-content into MTSV sheets."""
     if root.tag != _DOCUMENT_CONTENT:
         raise ValueError("content.xml is not office:document-content")
-    _note_attributes(root, (_VERSION,), extras)
+    _xml.note_attributes(root, (_VERSION,), extras, _PREFIXES)
     spreadsheet = None
     for child in root:
         if child.tag == _BODY:
             spreadsheet = child.find(_SPREADSHEET)
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
     if spreadsheet is None:
         raise ValueError("the document is not an office:spreadsheet")
-    _note_attributes(spreadsheet, (), extras)
+    _xml.note_attributes(spreadsheet, (), extras, _PREFIXES)
     sheets = []
     for child in spreadsheet:
         if child.tag != _TABLE_TABLE:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         sheets.append(_sheet(child, extras))
     return sheets
@@ -321,8 +276,8 @@ def _spreadsheet(
 
 def _sheet(element: ElementTree.Element, extras: set[str]) -> dict[str, Any]:
     """Parse table:table into a sheet, reading only its used area."""
-    _note_attributes(element, (_NAME,), extras)
-    name = element.get(_NAME)
+    _xml.note_attributes(element, (_NAME,), extras, _PREFIXES)
+    name = element.get(_NAME, "")
     lines: list[list[str]] = []
     pending = 0
     for count, values in _rows(element, extras):
@@ -332,11 +287,7 @@ def _sheet(element: ElementTree.Element, extras: set[str]) -> dict[str, Any]:
             lines.extend(list(values) for _ in range(count))
         else:
             pending += count
-    if not lines:
-        return {"sheet name": name, "header": None, "records": []}
-    width = max(len(values) for values in lines)
-    padded = [values + [""] * (width - len(values)) for values in lines]
-    return {"sheet name": name, "header": padded[0], "records": padded[1:]}
+    return mtsv.integrations._sheet(name, lines)
 
 
 def _rows(
@@ -345,20 +296,24 @@ def _rows(
     """Yield (repeat count, values) per row, reading into wrappers."""
     for child in element:
         if child.tag == _ROW:
-            _note_attributes(child, (_ROWS_REPEATED,), extras)
+            _xml.note_attributes(
+                child, (_ROWS_REPEATED,), extras, _PREFIXES
+            )
             count = _count(child.get(_ROWS_REPEATED, "1"), 1)
             yield count, _cells(child, extras)
         elif child.tag == _COLUMN:
-            _note_attributes(child, (_COLUMNS_REPEATED,), extras)
+            _xml.note_attributes(
+                child, (_COLUMNS_REPEATED,), extras, _PREFIXES
+            )
             _count(child.get(_COLUMNS_REPEATED, "1"), 1)
         elif child.tag in (_ROWS, _COLUMNS):
             yield from _rows(child, extras)
         elif child.tag in _WRAPPERS:
-            extras.add(_prefixed(child.tag))
-            _note_attributes(child, (), extras)
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            _xml.note_attributes(child, (), extras, _PREFIXES)
             yield from _rows(child, extras)
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
 
 
 def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
@@ -369,10 +324,10 @@ def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
         if child.tag == _CELL:
             text = _cell_value(child, extras)
         elif child.tag == _COVERED_CELL:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             text = ""
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         count = _count(child.get(_COLUMNS_REPEATED, "1"), 1)
         if text:
@@ -387,8 +342,7 @@ def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
 def _cell_value(cell: ElementTree.Element, extras: set[str]) -> str:
     """Read a cell's value, from its value attribute, ODF 1.3, 19.389.
 
-    The paragraphs render the value, so a value type other than string
-    is left behind with the style that rendered it.
+    A value type other than string is left behind.
     """
     value_type = cell.get(_VALUE_TYPE)
     holder = _VALUE_ATTRIBUTES.get(value_type)
@@ -400,14 +354,14 @@ def _cell_value(cell: ElementTree.Element, extras: set[str]) -> str:
             continue
         if key == holder and value is not None:
             continue
-        extras.add(_prefixed(key))
+        extras.add(_xml.prefixed(key, _PREFIXES))
     text = _cell_text(cell, extras)
     if value is None:
         return text
     if value_type != "string":
         extras.add(f"office:value-type {value_type}")
     elif text and text != value:
-        extras.add(_prefixed(_P))
+        extras.add(_xml.prefixed(_P, _PREFIXES))
     return value
 
 
@@ -417,11 +371,11 @@ def _cell_text(cell: ElementTree.Element, extras: set[str]) -> str:
     for child in cell:
         if child.tag in (_P, _H):
             if child.tag == _H:
-                extras.add(_prefixed(child.tag))
-            _note_attributes(child, (), extras)
+                extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            _xml.note_attributes(child, (), extras, _PREFIXES)
             paragraphs.append(_paragraph_text(child, extras))
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
     return _LF.join(paragraphs)
 
 
@@ -460,15 +414,15 @@ def _collect(
         elif child.tag == _LINE_BREAK:
             tokens.append((True, _LF))
         elif child.tag == _RUBY:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             base = child.find(_RUBY_BASE)
             if base is not None:
                 _collect(base, tokens, extras)
         elif child.tag in _PARAGRAPH_CONTENT:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             _collect(child, tokens, extras)
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
         if child.tail:
             tokens.append((False, _to_spaces(child.tail)))
 

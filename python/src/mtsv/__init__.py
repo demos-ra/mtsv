@@ -1,4 +1,4 @@
-"""Multi-Sheet Tab-Separated Values (MTSV), draft-demosra-mtsv-00.
+"""Multi-Sheet Tab-Separated Values (MTSV), draft-demosra-mtsv-01.
 
 Functions:
 dump -- write MTSV sheets to a binary file, encoded as UTF-8

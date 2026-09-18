@@ -1,36 +1,45 @@
 # MTSV for Python
 
-A parser and a generator for Multi-Sheet Tab-Separated Values (MTSV), with
-integrations for spreadsheets (ODS and XLSX) and data tools (Apache Arrow).
-The version is the `version` field of `pyproject.toml`.
+A parser and a generator for Multi-Sheet Tab-Separated Values (MTSV),
+with integrations for CSV, JSON, spreadsheets (ODS and XLSX) and data
+tools (Apache Arrow). The version is the `version` field of
+`pyproject.toml`.
 
 * [Specification](https://github.com/demos-ra/mtsv-spec)
 * [Repository](https://github.com/demos-ra/mtsv)
 
 ## Install
 
-```
-pip install mtsv
-```
-
-For the Arrow integration, which also installs pyarrow:
+The `mtsv` command, in an environment of its own:
 
 ```
-pip install "mtsv[arrow]"
+pipx install mtsv
 ```
 
-A Python that an operating system manages does not accept packages
-directly, so install into a virtual environment:
+The library, in a virtual environment:
 
 ```
 python3 -m venv .venv
 .venv/bin/pip install mtsv
 ```
 
+For the Arrow integration, which also installs pyarrow:
+
+```
+.venv/bin/pip install "mtsv[arrow]"
+```
+
 To install from a clone instead, run the same commands from the root of
 the repository with `./python` in place of `mtsv`.
 
 ## Convert files
+
+```
+mtsv book.xlsx
+```
+
+That writes `book.mtsv` beside it. Name the output to choose the format,
+or the name:
 
 ```
 mtsv book.xlsx book.mtsv
@@ -42,7 +51,7 @@ The file extensions name the formats, so any two of `.mtsv`, `.csv`,
 before the operands, and `-` is standard input or standard output:
 
 ```
-mtsv -e ignore book.xlsx book.mtsv
+mtsv -e strict book.xlsx book.mtsv
 mtsv book.xlsx -
 ```
 
@@ -52,12 +61,16 @@ The output file can also be named with `-o`, or `--output`:
 mtsv -o book.mtsv book.xlsx
 ```
 
-`-e ignore`, or `--errors ignore`, leaves behind whatever MTSV does not
-hold instead of stopping. A stream carries MTSV, because it has no file
-extension to name another format.
+A conversion that cannot carry everything still converts, and says on
+standard error what it left behind. `-e strict`, or `--errors strict`,
+refuses it instead. A stream carries MTSV, because it has no file
+extension to name another format, and the output must be named where
+there is no name to derive: a stream, or MTSV already.
 
-Each integration also has a module form of the same conversion, limited
-to its own format, such as `python -m mtsv.integrations.ods`.
+The ODS and XLSX integrations also have a module form of the same
+conversion, limited to their own format, such as
+`python -m mtsv.integrations.ods`. They carry it because they shipped
+before the command existed.
 
 ## Read and write MTSV
 
@@ -106,9 +119,9 @@ with open("book.csv", "rb") as file:
 ```
 
 CSV holds one table and has nowhere to record which sheet it came
-from, so it reads and writes the unnamed sheet — the same plane a TSV
-file holds. A file of more than one sheet, or whose sheet has a name,
-raises `ValueError`.
+from, so it reads and writes a sheet whose sheet name is empty — the
+same plane a TSV file holds. A file of more than one sheet, whose sheet
+name is not empty, or whose sheet has no lines, raises `ValueError`.
 
 ## Spreadsheets (ODS)
 
@@ -165,22 +178,26 @@ MTSV holds sheets, names, rows, and text. Everything else is left at the
 door, and each door reports what it dropped.
 
 Going out, ODS and XLSX both raise `ValueError` for a character that XML
-1.0 does not allow. XLSX also raises for a sheet with no name, for a file
-with no sheets, and for a sheet wider than 16,384 columns or longer than
-1,048,576 rows, because a workbook holds none of those. Begin a file with
-a form feed and name every sheet, and it converts.
+1.0 does not allow. XLSX also raises for a file with no sheets, and for a
+sheet wider than 16,384 columns or longer than 1,048,576 rows, because a
+workbook holds none of those. CSV raises for a file of more than one
+sheet, whose sheet name is not empty, or whose sheet has no lines,
+because CSV holds one table of at least one record and no sheet name.
+JSON holds everything MTSV holds, so it refuses nothing.
 
 Coming back in, whatever a spreadsheet holds that MTSV does not —
 formatting, formulas, types, styles, and the parts that carry them —
-raises `ValueError` by default. To confirm and leave it behind, pass
-`errors="ignore"`, or `--errors ignore` on the command line.
+is left behind. `load` raises `ValueError` rather than drop it, unless
+it is passed `errors="ignore"`. The command drops it and names it on
+standard error instead, because the person running it is reading the
+report; `--errors strict` makes the command refuse it too.
 
 Two differences are worth knowing. Empty rows and columns at the edge of
 an ODS sheet do not come back, so an ODS sheet of only empty fields comes
 back as an empty sheet; XLSX keeps them, because a workbook may leave a
 cell out entirely. And a workbook holds a date as a serial number, with
 the date format kept apart from it, so a cell showing `Jan-23` comes back
-from XLSX as `44927` where ODS gives `2023-01-15`.
+from XLSX as `44927` where ODS gives `2023-01-01`.
 
 Text that MTSV cannot hold, such as a tab or line break inside a value,
 always raises `ValueError`. So does an Arrow column whose values cannot be
@@ -199,6 +216,8 @@ text at all, such as binary, a list, or a struct.
 From the root of the repository:
 
 ```
+python3 -m venv .venv
+.venv/bin/pip install "./python[arrow]"
 .venv/bin/python -m unittest discover -s python/tests
 ```
 

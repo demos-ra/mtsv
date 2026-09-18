@@ -57,10 +57,20 @@ class TestMain(unittest.TestCase):
     def test_extension_without_a_format_stops(self):
         """An extension that names no format stops the conversion."""
         with tempfile.TemporaryDirectory() as directory:
-            other = Path(directory, "book.csv")
+            other = Path(directory, "book.txt")
             with contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit):
                     main([str(ORIGINAL), str(other)])
+
+    def test_missing_file_stops(self):
+        """GNU 4.4, 653-678: a missing file is named, not traced."""
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory, "missing.ods")
+            with self.assertRaises(SystemExit) as caught:
+                main([str(missing), str(Path(directory, "back.mtsv"))])
+            self.assertTrue(
+                str(caught.exception.code).startswith(f"mtsv: {missing}: ")
+            )
 
     def test_errors_option_has_a_single_character_name(self):
         """G-3, G-9: -e names the option, and options come first."""
@@ -87,6 +97,29 @@ class TestMain(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit):
                     main(["-o", str(book), str(ORIGINAL), str(book)])
+
+    def test_output_derived_from_the_input(self):
+        """A lone input operand converts to MTSV beside it."""
+        with tempfile.TemporaryDirectory() as directory:
+            book = Path(directory, "book.ods")
+            main([str(ORIGINAL), str(book)])
+            main([str(book)])
+            self.assertEqual(
+                Path(directory, "book.mtsv").read_bytes(),
+                ORIGINAL.read_bytes(),
+            )
+
+    def test_mtsv_input_needs_an_output(self):
+        """An MTSV input would derive itself, so the operand stays."""
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main([str(ORIGINAL)])
+
+    def test_standard_input_needs_an_output(self):
+        """G-13: "-" carries no name to derive an output from."""
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                main(["-"])
 
     def test_version_names_the_program(self):
         """GNU 4.8.1, 862-866: the first line is name then version."""

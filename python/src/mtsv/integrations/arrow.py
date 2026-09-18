@@ -13,8 +13,10 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 import mtsv
+import mtsv.integrations
 
-# The types whose slots hold one scalar, and so have a text form.
+# Arrow Columnar Format 1.5, Data Types: Null to Duration, whose
+# layout is Null or Fixed-size Primitive.
 _SCALAR = (
     pa.types.is_null,
     pa.types.is_boolean,
@@ -28,20 +30,21 @@ _SCALAR = (
     pa.types.is_duration,
 )
 
-# The layouts that encode a value type, rather than types of their own.
+# Arrow Columnar Format 1.5: any array can be dictionary-encoded or
+# run-end encoded.
 _ENCODINGS = (pa.types.is_dictionary, pa.types.is_run_end_encoded)
 
 
 def to_arrow(
     obj: list[dict[str, Any]], /
-) -> list[tuple[str | None, pa.Table]]:
+) -> list[tuple[str, pa.Table]]:
     """Create (sheet name, Arrow table) pairs from MTSV sheets."""
     mtsv.dumps(obj)
     return [(sheet["sheet name"], _table(sheet)) for sheet in obj]
 
 
 def from_arrow(
-    tables: list[tuple[str | None, pa.Table]],
+    tables: list[tuple[str, pa.Table]],
     /,
     errors: str = "strict",
 ) -> list[dict[str, Any]]:
@@ -50,20 +53,16 @@ def from_arrow(
     With errors="strict", raise ValueError if anything outside MTSV
     would be left behind. With errors="ignore", leave it behind.
     """
-    if errors not in ("strict", "ignore"):
-        raise LookupError(f"unknown error handler name {errors!r}")
+    mtsv.integrations._errors(errors)
     extras: set[str] = set()
     sheets = [_sheet(name, table, extras) for name, table in tables]
-    if errors == "strict" and extras:
-        raise ValueError(
-            "these would be left behind: " + ", ".join(sorted(extras))
-        )
+    mtsv.integrations.report(extras, errors)
     mtsv.dumps(sheets)
     return sheets
 
 
 def _table(sheet: dict[str, Any]) -> pa.Table:
-    """Create a table whose columns are the header fields, as strings."""
+    """Create a table of string columns named by the header fields."""
     header_fields = sheet["header"]
     if header_fields is None:
         return pa.Table.from_arrays([], names=[])
@@ -75,7 +74,7 @@ def _table(sheet: dict[str, Any]) -> pa.Table:
 
 
 def _sheet(
-    name: str | None, table: pa.Table, extras: set[str]
+    name: str, table: pa.Table, extras: set[str]
 ) -> dict[str, Any]:
     """Create a sheet from a table, recording anything outside MTSV."""
     if table.schema.metadata:
@@ -118,11 +117,7 @@ def _values(
 
 
 def _value_type(data_type: pa.DataType) -> pa.DataType:
-    """Look through the dictionary and run-end encodings.
-
-    Any array can be dictionary-encoded or run-end encoded, so an
-    encoding carries the values of its value type.
-    """
+    """Look through the dictionary and run-end encodings."""
     while any(is_encoding(data_type) for is_encoding in _ENCODINGS):
         data_type = data_type.value_type
     return data_type

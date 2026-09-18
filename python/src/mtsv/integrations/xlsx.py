@@ -8,6 +8,7 @@ main -- convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv
 
 __all__ = ["dump", "load", "main"]
 
+import re
 import zipfile
 from collections.abc import Iterator
 from typing import Any, BinaryIO
@@ -15,7 +16,9 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
+import mtsv.integrations
 from mtsv import _command
+from mtsv.integrations import _xml
 
 _MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 _R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -24,7 +27,8 @@ _RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _PREFIXES = {_MAIN: "", _R: "r", _RELATIONSHIPS: "", _CONTENT_TYPES: ""}
 
 # Content types and source relationships: ECMA-376 Part 2, 6.5.2.1,
-# Part 1, 12.3.23 and 12.3.24, and Part 4, 10.2.23 and 10.2.24.
+# Part 1, 12.3.15, 12.3.23 and 12.3.24, and Part 4, 10.2.15, 10.2.23
+# and 10.2.24.
 _RELATIONSHIP_TYPE = "application/vnd.openxmlformats-package.relationships+xml"
 _WORKBOOK_TYPE = (
     "application/vnd.openxmlformats-officedocument"
@@ -34,13 +38,31 @@ _WORKSHEET_TYPE = (
     "application/vnd.openxmlformats-officedocument"
     ".spreadsheetml.worksheet+xml"
 )
+_SHARED_STRINGS_TYPE = (
+    "application/vnd.openxmlformats-officedocument"
+    ".spreadsheetml.sharedStrings+xml"
+)
 _OFFICE_DOCUMENT_REL = _R + "/officeDocument"
 _WORKSHEET_REL = _R + "/worksheet"
+_SHARED_STRINGS_REL = _R + "/sharedStrings"
 
 _CONTENT_TYPES_PART = "[Content_Types].xml"
 _ROOT_RELS = "_rels/.rels"
 _WORKBOOK_RELS = "xl/_rels/workbook.xml.rels"
 _SHARED_STRINGS = "xl/sharedStrings.xml"
+
+# ECMA-376 Part 2, 6.5.3.4: TargetMode is Internal by default.
+_TARGET_MODE = "TargetMode"
+_INTERNAL = "Internal"
+
+# ECMA-376 Part 3, 7.1 and 9.4: the Markup Compatibility namespace, and
+# the attributes an MCE processor removes from every element.
+_MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+_MCE_ATTRIBUTES = (
+    "{" + _MC + "}Ignorable",
+    "{" + _MC + "}ProcessContent",
+    "{" + _MC + "}MustUnderstand",
+)
 
 _SHEETS = "{" + _MAIN + "}sheets"
 _SHEET = "{" + _MAIN + "}sheet"
@@ -68,14 +90,15 @@ _LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 _COLUMNS = 16384
 _ROWS = 1048576
 
+_DIGITS = re.compile("[0-9]+")
+
 
 def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     """Write MTSV sheets to a binary file as an OOXML workbook.
 
     Raise ValueError if the sheets are not MTSV, if the file has no
-    sheets, if a sheet is unnamed, if a sheet is wider or longer than
-    the grid, or if a field or sheet name holds a character that XML
-    1.0 does not allow.
+    sheets, if a sheet is wider or longer than the grid, or if a field
+    or sheet name holds a character that XML 1.0 does not allow.
     """
     mtsv.dumps(obj)
     if not obj:
@@ -84,11 +107,6 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
             " sheets cannot be represented in XLSX"
         )
     for sheet in obj:
-        if sheet["sheet name"] is None:
-            raise ValueError(
-                "every sheet of a workbook has a name, so the unnamed"
-                " sheet cannot be represented in XLSX"
-            )
         lines = _lines(sheet)
         if len(lines) > _ROWS:
             raise ValueError(
@@ -100,20 +118,13 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
                 f"a worksheet holds at most {_COLUMNS} columns, so a"
                 " wider sheet cannot be represented in XLSX"
             )
-        values = [sheet["sheet name"]]
-        for fields in lines:
-            values.extend(fields)
-        for value in values:
-            if not all(_xml_char(char) for char in value):
-                raise ValueError(
-                    "a field or sheet name that contains a character not"
-                    " allowed in XML 1.0 cannot be represented in XLSX"
-                )
+    _xml.check_chars(obj, "XLSX")
     with zipfile.ZipFile(fp, "w", zipfile.ZIP_DEFLATED) as package:
         package.writestr(_CONTENT_TYPES_PART, _content_types(len(obj)))
         package.writestr(_ROOT_RELS, _root_relationships())
         package.writestr("xl/workbook.xml", _workbook(obj))
         package.writestr(_WORKBOOK_RELS, _workbook_relationships(len(obj)))
+        package.writestr(_SHARED_STRINGS, _shared_string_table())
         for index, sheet in enumerate(obj):
             package.writestr(
                 f"xl/worksheets/sheet{index + 1}.xml", _worksheet(sheet)
@@ -127,18 +138,14 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     would be left behind. With errors="ignore", leave it behind. Raise
     ValueError for a file that is not an OOXML workbook.
     """
-    if errors not in ("strict", "ignore"):
-        raise LookupError(f"unknown error handler name {errors!r}")
+    mtsv.integrations._errors(errors)
     extras: set[str] = set()
     try:
         with zipfile.ZipFile(fp) as package:
             sheets = _package(package, extras)
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as error:
         raise ValueError("the file is not an OOXML package") from error
-    if errors == "strict" and extras:
-        raise ValueError(
-            "these would be left behind: " + ", ".join(sorted(extras))
-        )
+    mtsv.integrations.report(extras, errors)
     mtsv.dumps(sheets)
     return sheets
 
@@ -148,7 +155,7 @@ def main(argv: list[str] | None = None) -> None:
     _command.run(
         "python -m mtsv.integrations.xlsx",
         "Convert a .mtsv file to .xlsx, or .xlsx to .mtsv.",
-        {".xlsx": (load, dump)},
+        (".xlsx",),
         argv,
     )
 
@@ -163,8 +170,7 @@ def _lines(sheet: dict[str, Any]) -> list[list[str]]:
 def _content_types(count: int) -> str:
     """Generate [Content_Types].xml, per ECMA-376 Part 2.
 
-    Every part is covered by the rels default or by its own override,
-    so no default is needed for the xml extension.
+    Every part is covered by the rels default or by its own override.
     """
     overrides = "".join(
         f"<Override PartName='/xl/worksheets/sheet{index + 1}.xml'"
@@ -177,6 +183,8 @@ def _content_types(count: int) -> str:
         f"<Default Extension='rels' ContentType='{_RELATIONSHIP_TYPE}'/>"
         f"<Override PartName='/xl/workbook.xml'"
         f" ContentType='{_WORKBOOK_TYPE}'/>"
+        f"<Override PartName='/{_SHARED_STRINGS}'"
+        f" ContentType='{_SHARED_STRINGS_TYPE}'/>"
         f"{overrides}</Types>"
     )
 
@@ -193,7 +201,11 @@ def _root_relationships() -> str:
 
 
 def _workbook_relationships(count: int) -> str:
-    """Generate xl/_rels/workbook.xml.rels, one entry per worksheet."""
+    """Generate xl/_rels/workbook.xml.rels.
+
+    One entry per worksheet, then the shared string table, which Part 1,
+    12.3.15 makes the target of a relationship from the workbook.
+    """
     entries = "".join(
         f"<Relationship Id='rId{index + 1}' Type='{_WORKSHEET_REL}'"
         f" Target='worksheets/sheet{index + 1}.xml'/>"
@@ -202,7 +214,21 @@ def _workbook_relationships(count: int) -> str:
     return (
         "<?xml version='1.0' encoding='UTF-8'?>"
         f"<Relationships xmlns='{_RELATIONSHIPS}'>{entries}"
+        f"<Relationship Id='rId{count + 1}' Type='{_SHARED_STRINGS_REL}'"
+        " Target='sharedStrings.xml'/>"
         "</Relationships>"
+    )
+
+
+def _shared_string_table() -> str:
+    """Generate xl/sharedStrings.xml, a table of no strings.
+
+    Part 1, 12.3.15: a package contains exactly one shared string
+    table.
+    """
+    return (
+        "<?xml version='1.0' encoding='UTF-8'?>"
+        f"<sst xmlns='{_MAIN}'/>"
     )
 
 
@@ -243,10 +269,7 @@ def _row(fields: list[str], number: int) -> str:
 
 
 def _cell(value: str, reference: str) -> str:
-    """Generate a cell; MTSV holds text, so a cell is inline text.
-
-    An empty field is a cell that carries no value.
-    """
+    """Generate a cell of inline text; an empty field has no value."""
     if not value:
         return f"<c r='{reference}'/>"
     return (
@@ -278,41 +301,6 @@ def _column(reference: str) -> int:
     return column
 
 
-def _xml_char(char: str) -> bool:
-    """Match XML 1.0 Char.
-
-    Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
-             | [#x10000-#x10FFFF]
-    """
-    code = ord(char)
-    return (
-        code in (0x09, 0x0A, 0x0D)
-        or 0x20 <= code <= 0xD7FF
-        or 0xE000 <= code <= 0xFFFD
-        or 0x10000 <= code <= 0x10FFFF
-    )
-
-
-def _prefixed(name: str) -> str:
-    """Return {namespace}local as prefix:local for known prefixes."""
-    if not name.startswith("{"):
-        return name
-    namespace, local = name[1:].split("}", 1)
-    prefix = _PREFIXES.get(namespace)
-    if prefix is None:
-        return name
-    return local if not prefix else f"{prefix}:{local}"
-
-
-def _note_attributes(
-    element: ElementTree.Element, allowed: tuple[str, ...], extras: set[str]
-) -> None:
-    """Record each attribute outside the MTSV mapping as left behind."""
-    for key in element.attrib:
-        if key not in allowed:
-            extras.add(_prefixed(key))
-
-
 def _package(
     package: zipfile.ZipFile, extras: set[str], /
 ) -> list[dict[str, Any]]:
@@ -320,77 +308,142 @@ def _package(
 
     Record every part the mapping does not read as left behind.
     """
-    part = _target(package, _ROOT_RELS, _OFFICE_DOCUMENT_REL, "")
-    used = {_CONTENT_TYPES_PART, _ROOT_RELS, _WORKBOOK_RELS, part}
-    strings = _shared_strings(package, extras)
-    if _SHARED_STRINGS in package.namelist():
-        used.add(_SHARED_STRINGS)
-    root = ElementTree.fromstring(package.read(part))
-    targets = _targets(package)
+    workbook = _part(_relationships(package, "/"), _OFFICE_DOCUMENT_REL)
+    relationships = _relationships(package, workbook)
+    used = {
+        _CONTENT_TYPES_PART,
+        _zip_name(_relationships_part("/")),
+        _zip_name(workbook),
+        _zip_name(_relationships_part(workbook)),
+    }
+    strings: list[str] = []
+    if any(kind == _SHARED_STRINGS_REL for kind, _ in relationships.values()):
+        table = _part(relationships, _SHARED_STRINGS_REL)
+        used.add(_zip_name(table))
+        strings = _shared_strings(package, table, extras)
+    root = ElementTree.fromstring(package.read(_zip_name(workbook)))
+    _xml.note_attributes(root, _MCE_ATTRIBUTES, extras, _PREFIXES)
     sheets = []
     for child in root:
         if child.tag != _SHEETS:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         for entry in child:
             if entry.tag != _SHEET:
-                extras.add(_prefixed(entry.tag))
+                extras.add(_xml.prefixed(entry.tag, _PREFIXES))
                 continue
-            used.add(targets[entry.get(_ID)])
-            sheets.append(_sheet(entry, package, targets, strings, extras))
+            part = relationships[entry.get(_ID)][1]
+            used.add(_zip_name(part))
+            sheets.append(_sheet(entry, package, part, strings, extras))
     for name in package.namelist():
         if name not in used:
             extras.add(name)
     return sheets
 
 
-def _target(
-    package: zipfile.ZipFile, part: str, relationship: str, base: str
-) -> str:
-    """Return the part that a relationship of that type points to."""
-    root = ElementTree.fromstring(package.read(part))
-    for entry in root:
-        if entry.tag == _RELATIONSHIP and entry.get("Type") == relationship:
-            return base + entry.get("Target")
-    raise ValueError(f"the package has no {relationship} relationship")
+def _relationships(
+    package: zipfile.ZipFile, source: str
+) -> dict[str, tuple[str, str]]:
+    """Map each internal relationship Id of a source to type and part.
 
-
-def _targets(package: zipfile.ZipFile) -> dict[str, str]:
-    """Map each relationship Id of the workbook to its part name."""
-    root = ElementTree.fromstring(package.read(_WORKBOOK_RELS))
+    ECMA-376 Part 2, 6.5.3.4: a Target is resolved against its source.
+    """
+    name = _zip_name(_relationships_part(source))
+    root = ElementTree.fromstring(package.read(name))
     return {
-        entry.get("Id"): "xl/" + entry.get("Target")
+        entry.get("Id"): (
+            entry.get("Type"),
+            _resolve(source, entry.get("Target")),
+        )
         for entry in root
         if entry.tag == _RELATIONSHIP
+        and entry.get(_TARGET_MODE, _INTERNAL) == _INTERNAL
     }
+
+
+def _part(relationships: dict[str, tuple[str, str]], kind: str) -> str:
+    """Return the part that the first relationship of a type targets."""
+    for relationship, part in relationships.values():
+        if relationship == kind:
+            return part
+    raise ValueError(f"the package has no {kind} relationship")
+
+
+def _relationships_part(source: str) -> str:
+    """Return the name of a source's Relationships part.
+
+    ECMA-376 Part 2, 6.5.2.2 and 6.5.2.3: "_rels" is inserted before
+    the last segment, and ".rels" is added to it.
+    """
+    folder, _, last = source.rpartition("/")
+    return f"{folder}/_rels/{last}.rels"
+
+
+def _resolve(source: str, target: str) -> str:
+    """Resolve an internal Target to a part name, RFC 3986, 5.2.2.
+
+    ECMA-376 Part 2, 6.5.3.4: an internal Target is a relative
+    reference. A Target with a scheme or an authority is refused.
+    """
+    if target.startswith("//") or ":" in target.split("/", 1)[0]:
+        raise ValueError(f"target {target!r} is not a relative reference")
+    if not target:
+        path = source
+    elif target.startswith("/"):
+        path = target
+    else:
+        path = source[: source.rfind("/") + 1] + target
+    return _remove_dot_segments(path)
+
+
+def _remove_dot_segments(path: str) -> str:
+    """Remove "." and ".." segments from a path, RFC 3986, 5.2.4."""
+    segments = path.split("/")[1:]
+    output: list[str] = []
+    for segment in segments:
+        if segment == "..":
+            if output:
+                output.pop()
+        elif segment != ".":
+            output.append(segment)
+    if segments and segments[-1] in (".", ".."):
+        output.append("")
+    return "/" + "/".join(output)
+
+
+def _zip_name(part: str) -> str:
+    """Return the ZIP item name of a part name, Part 2, 7.3.4.
+
+    The leading "/" is removed, and every non-ASCII character is
+    percent-encoded.
+    """
+    return "".join(
+        char
+        if char.isascii()
+        else "".join(f"%{byte:02X}" for byte in char.encode("utf-8"))
+        for char in part[1:]
+    )
 
 
 def _sheet(
     entry: ElementTree.Element,
     package: zipfile.ZipFile,
-    targets: dict[str, str],
+    part: str,
     strings: list[str],
     extras: set[str],
 ) -> dict[str, Any]:
-    """Read one sheet, named in the workbook, held in its own part.
-
-    MTSV carries the name and the order; sheetId and r:id are what the
-    format needs to hold itself together, as office:version is in ODS.
-    """
-    _note_attributes(entry, (_NAME, _SHEET_ID, _ID), extras)
+    """Read one sheet, named in the workbook, held in its own part."""
+    _xml.note_attributes(entry, (_NAME, _SHEET_ID, _ID), extras, _PREFIXES)
     name = entry.get(_NAME)
-    root = ElementTree.fromstring(package.read(targets[entry.get(_ID)]))
+    root = ElementTree.fromstring(package.read(_zip_name(part)))
+    _xml.note_attributes(root, _MCE_ATTRIBUTES, extras, _PREFIXES)
     lines: list[list[str]] = []
     for child in root:
         if child.tag != _SHEET_DATA:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         lines.extend(_rows(child, strings, extras))
-    if not lines:
-        return {"sheet name": name, "header": None, "records": []}
-    width = max(len(values) for values in lines)
-    padded = [values + [""] * (width - len(values)) for values in lines]
-    return {"sheet name": name, "header": padded[0], "records": padded[1:]}
+    return mtsv.integrations._sheet(name, lines)
 
 
 def _rows(
@@ -399,9 +452,9 @@ def _rows(
     """Yield the values of each row of a sheetData, in order."""
     for child in element:
         if child.tag != _ROW:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
-        _note_attributes(child, (_REFERENCE,), extras)
+        _xml.note_attributes(child, (_REFERENCE,), extras, _PREFIXES)
         yield _cells(child, strings, extras)
 
 
@@ -410,21 +463,24 @@ def _cells(
 ) -> list[str]:
     """Read a row's cell values, at the positions the cells give.
 
-    A cell that a row leaves out is an empty field, but a cell that a
-    row writes is kept, empty or not: OOXML may omit a cell entirely,
-    so writing one is itself the signal that the field is there.
+    A cell that a row leaves out is an empty field; a cell that a row
+    writes is kept, empty or not.
     """
-    values: list[str] = []
+    values: dict[int, str] = {}
+    position = 0
     for child in row:
         if child.tag != _CELL:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         reference = child.get(_REFERENCE)
-        if reference is not None:
-            position = _column(reference)
-            values.extend([""] * (position - 1 - len(values)))
-        values.append(_cell_value(child, strings, extras))
-    return values
+        position = position + 1 if reference is None else _column(reference)
+        if position < 1 or position in values:
+            raise ValueError(
+                f"cell {reference!r} does not give a free column of its row"
+            )
+        values[position] = _cell_value(child, strings, extras)
+    width = max(values, default=0)
+    return [values.get(column, "") for column in range(1, width + 1)]
 
 
 def _cell_value(
@@ -432,11 +488,10 @@ def _cell_value(
 ) -> str:
     """Read a cell's value, per ISO/IEC 29500 ST_CellType.
 
-    A type other than s, str or inlineStr holds a value whose type
-    MTSV cannot hold, so that type is itself left behind. A cell that
+    A type other than s, str or inlineStr is left behind. A cell that
     carries no value leaves nothing behind, whatever its type says.
     """
-    _note_attributes(cell, (_REFERENCE, _TYPE), extras)
+    _xml.note_attributes(cell, (_REFERENCE, _TYPE), extras, _PREFIXES)
     cell_type = cell.get(_TYPE, "n")
     text = None
     for child in cell:
@@ -445,29 +500,32 @@ def _cell_value(
         elif child.tag == _INLINE:
             text = _rst_text(child, extras)
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
     if text is None:
         return ""
     if cell_type not in _TEXT_TYPES:
         extras.add(f"cell type {cell_type}")
     if cell_type == "s":
+        if not _DIGITS.fullmatch(text) or int(text) >= len(strings):
+            raise ValueError(f"no shared string {text!r}")
         return strings[int(text)]
     return text
 
 
-def _shared_strings(package: zipfile.ZipFile, extras: set[str]) -> list[str]:
-    """Read the shared string table, which a workbook may not have."""
-    if _SHARED_STRINGS not in package.namelist():
-        return []
-    root = ElementTree.fromstring(package.read(_SHARED_STRINGS))
+def _shared_strings(
+    package: zipfile.ZipFile, part: str, extras: set[str]
+) -> list[str]:
+    """Read the shared string table that the workbook points to."""
+    root = ElementTree.fromstring(package.read(_zip_name(part)))
     if root.tag != _SST:
         raise ValueError("the shared string part is not an sst")
+    _xml.note_attributes(root, _MCE_ATTRIBUTES, extras, _PREFIXES)
     strings = []
     for child in root:
         if child.tag == _SI:
             strings.append(_rst_text(child, extras))
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
     return strings
 
 
@@ -482,9 +540,9 @@ def _rst_text(element: ElementTree.Element, extras: set[str]) -> str:
                 if part.tag == _TEXT:
                     parts.append(part.text or "")
                 else:
-                    extras.add(_prefixed(part.tag))
+                    extras.add(_xml.prefixed(part.tag, _PREFIXES))
         else:
-            extras.add(_prefixed(child.tag))
+            extras.add(_xml.prefixed(child.tag, _PREFIXES))
     return "".join(parts)
 
 

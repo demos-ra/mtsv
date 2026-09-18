@@ -1,7 +1,7 @@
 """Test mtsv.integrations.csv against RFC 4180 and RFC 7111.
 
-CSV holds one table, so the sheet it reads and writes is the unnamed
-sheet, which is the plane a TSV file holds.
+CSV holds one table, so the sheet it reads and writes is a sheet whose
+sheet name is empty, which is the plane a TSV file holds.
 """
 
 import io
@@ -11,29 +11,28 @@ from mtsv.integrations import csv
 
 from support import load_json, paths
 
-SHEET = [{"sheet name": None, "header": ["a", "b"], "records": [["1", "2"]]}]
+SHEET = [{"sheet name": "", "header": ["a", "b"], "records": [["1", "2"]]}]
 BYTES = b"a,b\r\n1,2\r\n"
 
 
 class TestDump(unittest.TestCase):
     """Writing CSV."""
 
-    def test_unnamed_sheet(self):
+    def test_empty_name(self):
         """RFC 4180, 2: a line ends with CRLF, the header first."""
         buffer = io.BytesIO()
         csv.dump(SHEET, buffer)
         self.assertEqual(buffer.getvalue(), BYTES)
 
     def test_no_sheets(self):
-        """A file of no sheets gives a file of no lines."""
-        buffer = io.BytesIO()
-        csv.dump([], buffer)
-        self.assertEqual(buffer.getvalue(), b"")
+        """RFC 4180, 2: a file holds a record; no sheets is refused."""
+        with self.assertRaises(ValueError):
+            csv.dump([], io.BytesIO())
 
     def test_more_than_one_sheet(self):
         """CSV holds one table, so two sheets are refused."""
         sheets = [
-            {"sheet name": None, "header": ["a"], "records": []},
+            {"sheet name": "", "header": ["a"], "records": []},
             {"sheet name": "S", "header": ["a"], "records": []},
         ]
         with self.assertRaises(ValueError):
@@ -45,10 +44,16 @@ class TestDump(unittest.TestCase):
         with self.assertRaises(ValueError):
             csv.dump(sheets, io.BytesIO())
 
+    def test_empty_sheet(self):
+        """RFC 4180, 2: a file holds a record; no lines is refused."""
+        sheets = [{"sheet name": "", "header": None, "records": []}]
+        with self.assertRaises(ValueError):
+            csv.dump(sheets, io.BytesIO())
+
     def test_quoting(self):
         """RFC 4180, 6 and 7: quote a comma, double a quotation mark."""
         sheets = [
-            {"sheet name": None, "header": ['a,b', 'c"d'], "records": []}
+            {"sheet name": "", "header": ['a,b', 'c"d'], "records": []}
         ]
         buffer = io.BytesIO()
         csv.dump(sheets, buffer)
@@ -73,9 +78,19 @@ class TestLoad(unittest.TestCase):
         """RFC 7111, 5.1: an implementation may use other values."""
         self.assertEqual(csv.load(io.BytesIO(b"a,b\n1,2\n")), SHEET)
 
-    def test_no_lines(self):
-        """A file of no lines gives a file of no sheets."""
-        self.assertEqual(csv.load(io.BytesIO(b"")), [])
+    def test_empty_file(self):
+        """RFC 4180, 2: an empty file is a record of an empty field."""
+        self.assertEqual(
+            csv.load(io.BytesIO(b"")),
+            [{"sheet name": "", "header": [""], "records": []}],
+        )
+
+    def test_blank_line(self):
+        """RFC 4180, 2: a blank line is a record of an empty field."""
+        self.assertEqual(
+            csv.load(io.BytesIO(b"a\r\n\r\n")),
+            [{"sheet name": "", "header": ["a"], "records": [[""]]}],
+        )
 
     def test_line_break_in_a_field(self):
         """A field holding a line break cannot be held by MTSV."""

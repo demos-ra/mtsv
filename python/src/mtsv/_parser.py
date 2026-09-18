@@ -1,4 +1,4 @@
-"""Parse MTSV text, following draft-demosra-mtsv-00, Section 5."""
+"""Parse MTSV text, following draft-demosra-mtsv-01, Section 5."""
 
 from typing import Any
 
@@ -37,14 +37,14 @@ class MTSVDecodeError(ValueError):
 
 
 def mtsv_file(src: str, pos: int) -> tuple[int, list[dict[str, Any]]]:
-    """Parse: mtsv-file = unnamed-sheet *named-sheet.
+    """Parse: mtsv-file = first-sheet *named-sheet.
 
     Skip a U+FEFF at the start of the file, which is an encoding
     signature (Section 5).
     """
     if pos == 0 and src.startswith(SIGNATURE):
         pos = 1
-    pos, sheet = unnamed_sheet(src, pos)
+    pos, sheet = first_sheet(src, pos)
     sheets: list[dict[str, Any]] = [] if sheet is None else [sheet]
     while pos < len(src):
         pos, sheet = named_sheet(src, pos)
@@ -52,13 +52,13 @@ def mtsv_file(src: str, pos: int) -> tuple[int, list[dict[str, Any]]]:
     return pos, sheets
 
 
-def unnamed_sheet(src: str, pos: int) -> tuple[int, dict[str, Any] | None]:
-    """Parse: unnamed-sheet = sheet-body."""
+def first_sheet(src: str, pos: int) -> tuple[int, dict[str, Any] | None]:
+    """Parse: first-sheet = sheet-body, whose sheet name is empty."""
     pos, (header_fields, records) = sheet_body(src, pos)
     if header_fields is None:
         return pos, None
     return pos, {
-        "sheet name": None,
+        "sheet name": "",
         "header": header_fields,
         "records": records,
     }

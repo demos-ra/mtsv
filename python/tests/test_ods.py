@@ -5,6 +5,7 @@ file, I-n for reading one.
 """
 
 import io
+import logging
 import tempfile
 import unittest
 import zipfile
@@ -43,10 +44,12 @@ XML_FORBIDDEN = {
     "sheet-name-u000b",
     "sheet-name-u000e",
 }
-REFUSED_ON_LOAD = {"empty-first-field"}
 TRIMMED = {
+    "empty-first-field": [
+        {"sheet name": "", "header": None, "records": []},
+    ],
     "empty-later-field": [
-        {"sheet name": None, "header": ["a"], "records": []},
+        {"sheet name": "", "header": ["a"], "records": []},
     ],
 }
 
@@ -271,6 +274,19 @@ MAPPED = [
         [{"sheet name": "S", "header": None, "records": []}],
     ),
     (
+        "I-11 nameless later table",
+        package(table() + table(attributes="")),
+        [
+            {"sheet name": "S", "header": ["a"], "records": []},
+            {"sheet name": "", "header": ["a"], "records": []},
+        ],
+    ),
+    (
+        "I-11 nameless empty table",
+        package(table(COLUMN + row(cell("", "")), "")),
+        [{"sheet name": "", "header": None, "records": []}],
+    ),
+    (
         "I-12",
         package(
             table(
@@ -352,6 +368,11 @@ MAPPED = [
         one_value("a  b"),
     ),
     (
+        "I-44 signature in a field",
+        package(table(COLUMN + row(cell("<text:p>&#xFEFF;a</text:p>")), "")),
+        [{"sheet name": "", "header": [chr(0xFEFF) + "a"], "records": []}],
+    ),
+    (
         "I-52",
         one_cell("", " office:value-type='void'"),
         [{"sheet name": "S", "header": None, "records": []}],
@@ -375,8 +396,6 @@ ALWAYS = [
             "</office:document-content>"
         ),
     ),
-    ("I-11 unnamed not first", package(table() + table(attributes=""))),
-    ("I-11 unnamed empty", package(table(COLUMN + row(cell("", "")), ""))),
     (
         "I-13",
         package(
@@ -392,10 +411,6 @@ ALWAYS = [
     ("I-40 tab", one_cell("<text:p>a<text:tab/>b</text:p>")),
     ("I-40 line break", one_cell("<text:p>a<text:line-break/>b</text:p>")),
     ("I-44 sheet name", package(table(attributes=" table:name='S&#9;S'"))),
-    (
-        "I-44 signature",
-        package(table(COLUMN + row(cell("<text:p>&#xFEFF;a</text:p>")), "")),
-    ),
 ]
 
 
@@ -411,9 +426,6 @@ class TestDump(unittest.TestCase):
                 if name in XML_FORBIDDEN:
                     with self.assertRaises(ValueError):
                         ods.dump(value, io.BytesIO())
-                elif name in REFUSED_ON_LOAD:
-                    with self.assertRaises(ValueError):
-                        round_trip(value)
                 else:
                     expected = TRIMMED.get(name, value)
                     self.assertEqual(round_trip(value), expected)
@@ -447,7 +459,7 @@ class TestLoad(unittest.TestCase):
     """Reading ODS: rows I-1 to I-52."""
 
     def test_left_behind(self):
-        """R3: strict refuses each extra, and ignore leaves it behind."""
+        """R3: strict refuses each extra; ignore leaves it behind."""
         for row_id, data, expected in LEFT_BEHIND:
             with self.subTest(row_id):
                 with self.assertRaises(ValueError):
@@ -490,8 +502,8 @@ class TestMain(unittest.TestCase):
             ods.main([str(spreadsheet), str(back)])
             self.assertEqual(back.read_bytes(), original.read_bytes())
 
-    def test_extras_need_the_errors_option(self):
-        """R6: extras stop the conversion without --errors ignore."""
+    def test_extras_are_reported_not_refused(self):
+        """R6: extras are noted, and --errors strict refuses them."""
         data = package(
             table(attributes=" table:name='S' table:style-name='ta1'")
         )
@@ -500,7 +512,8 @@ class TestMain(unittest.TestCase):
             spreadsheet = Path(directory, "styled.ods")
             result = Path(directory, "styled.mtsv")
             spreadsheet.write_bytes(data)
-            with self.assertRaises(SystemExit):
+            with self.assertLogs("mtsv.integrations", logging.WARNING):
                 ods.main([str(spreadsheet), str(result)])
-            ods.main([str(spreadsheet), str(result), "--errors", "ignore"])
             self.assertEqual(result.read_bytes(), expected)
+            with self.assertRaises(SystemExit):
+                ods.main([str(spreadsheet), str(result), "--errors", "strict"])
