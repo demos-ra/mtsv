@@ -138,7 +138,7 @@ class TestMain(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 main(["--help"])
         self.assertEqual(caught.exception.code, 0)
-        self.assertIn("Report bugs at:", stream.getvalue())
+        self.assertIn("Report bugs to:", stream.getvalue())
 
     def test_standard_output(self):
         """G-13: an output operand of "-" is standard output."""

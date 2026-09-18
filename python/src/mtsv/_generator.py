@@ -1,17 +1,15 @@
-"""Generate MTSV text, following draft-demosra-mtsv-01, Section 6."""
+"""Generate MTSV text, following the draft, Generators."""
 
 from typing import Any
 
-HTAB = chr(0x09)
-LF = chr(0x0A)
-FF = chr(0x0C)
+from mtsv._grammar import FF, HTAB, LF, field_char
 
 
 def mtsv_file(sheets: list[dict[str, Any]]) -> str:
     """Generate: mtsv-file = first-sheet *named-sheet.
 
     Write an FF line before every sheet, so first-sheet is empty
-    (Section 6).
+    (the draft, Generators).
     """
     return "".join(named_sheet(sheet) for sheet in sheets)
 
@@ -76,12 +74,6 @@ def sheet_name(value: str) -> str:
             " cannot be represented in MTSV"
         )
     return value
-
-
-def field_char(char: str) -> bool:
-    """Match: field-char = %x00-08 / %x0B / %x0E-10FFFF."""
-    code = ord(char)
-    return 0x00 <= code <= 0x08 or code == 0x0B or 0x0E <= code <= 0x10FFFF
 
 
 def eol() -> str:

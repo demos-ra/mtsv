@@ -3,7 +3,7 @@
 Functions:
 dump -- write MTSV sheets to a binary file as an ODF spreadsheet
 load -- read MTSV sheets from a binary ODF spreadsheet file
-main -- convert a .mtsv file to .ods, or an .ods file to .mtsv
+main -- deprecated: convert .mtsv to .ods, or .ods to .mtsv
 """
 
 __all__ = ["dump", "load", "main"]
@@ -104,6 +104,7 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     """
     mtsv.dumps(obj)
     _xml.check_chars(obj, "ODS")
+    # ODF 1.3 Part 2, 3.3: "mimetype" is the first file, not compressed.
     with zipfile.ZipFile(fp, "w") as package:
         package.writestr(
             zipfile.ZipInfo("mimetype"), _MEDIA_TYPE, zipfile.ZIP_STORED
@@ -144,7 +145,11 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Convert a .mtsv file to .ods, or an .ods file to .mtsv."""
+    """Convert a .mtsv file to .ods, or an .ods file to .mtsv.
+
+    Deprecated; to be removed in 0.5.0. Semantic Versioning, "How
+    should I handle deprecating functionality?"
+    """
     _command.run(
         "python -m mtsv.integrations.ods",
         "Convert a .mtsv file to .ods, or an .ods file to .mtsv.",
@@ -216,7 +221,7 @@ def _cell(value: str) -> str:
 
 
 def _paragraph(value: str) -> str:
-    """Generate text:p content, with spaces marked per ODF 6.1.2-6.1.3.
+    """Generate text:p content, spaces marked per ODF 1.3, 6.1.2-6.1.3.
 
     A single space between other characters stays a space; every other
     space is written with text:s.
@@ -380,7 +385,7 @@ def _cell_text(cell: ElementTree.Element, extras: set[str]) -> str:
 
 
 def _paragraph_text(paragraph: ElementTree.Element, extras: set[str]) -> str:
-    """Read a paragraph per the white space algorithm, ODF 6.1.2."""
+    """Read a paragraph by the white space rules of ODF 1.3, 6.1.2."""
     tokens: list[tuple[bool, str]] = []
     _collect(paragraph, tokens, extras)
     merged: list[tuple[bool, str]] = []

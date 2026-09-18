@@ -1,6 +1,7 @@
 """Test mtsv.integrations.arrow: the door out and the door in."""
 
 import datetime
+import logging
 import unittest
 
 try:
@@ -220,8 +221,15 @@ class TestFromArrow(unittest.TestCase):
         table = column(["x"]).replace_schema_metadata({"k": "v"})
         with self.assertRaises(ValueError):
             arrow.from_arrow([("S", table)])
+        with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
+            result = arrow.from_arrow([("S", table)], errors="ignore")
+        self.assertEqual(result, one_cell("x"))
+        record, = logs.records
+        names = record.left_behind
+        self.assertTrue(names)
+        self.assertEqual(names, sorted(names))
         self.assertEqual(
-            arrow.from_arrow([("S", table)], errors="ignore"), one_cell("x")
+            record.getMessage(), "left behind: " + ", ".join(names)
         )
 
     def test_column_metadata_needs_confirmation(self):

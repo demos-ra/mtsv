@@ -24,7 +24,7 @@ _READ = "utf-8-sig"
 # except one final line feed.
 _SEPARATORS = (",", ":")
 
-# The members of a sheet, draft-demosra-mtsv-00, Section 3.
+# The members of a sheet, the draft, Data Model.
 _KEYS = ("sheet name", "header", "records")
 
 

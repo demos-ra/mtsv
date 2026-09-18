@@ -3,7 +3,7 @@
 Functions:
 dump -- write MTSV sheets to a binary file as an OOXML workbook
 load -- read MTSV sheets from a binary OOXML workbook file
-main -- convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv
+main -- deprecated: convert .mtsv to .xlsx, or .xlsx to .mtsv
 """
 
 __all__ = ["dump", "load", "main"]
@@ -151,7 +151,11 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv."""
+    """Convert a .mtsv file to .xlsx, or an .xlsx file to .mtsv.
+
+    Deprecated; to be removed in 0.5.0. Semantic Versioning, "How
+    should I handle deprecating functionality?"
+    """
     _command.run(
         "python -m mtsv.integrations.xlsx",
         "Convert a .mtsv file to .xlsx, or .xlsx to .mtsv.",

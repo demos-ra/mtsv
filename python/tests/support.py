@@ -4,7 +4,7 @@ import json
 import logging
 from pathlib import Path
 
-# Python logging HOWTO, 1302-1309: a library adds a NullHandler where
+# Python logging HOWTO, 695-702: a library adds a NullHandler where
 # its events should not be printed without configuration.
 _LOGGER = logging.getLogger("mtsv")
 _LOGGER.addHandler(logging.NullHandler())

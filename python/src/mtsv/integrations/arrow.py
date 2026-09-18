@@ -30,8 +30,9 @@ _SCALAR = (
     pa.types.is_duration,
 )
 
-# Arrow Columnar Format 1.5: any array can be dictionary-encoded or
-# run-end encoded.
+# Arrow Columnar Format 1.5, Dictionary-encoded Layout and Run-End
+# Encoded Layout: any array can be dictionary-encoded or run-end
+# encoded.
 _ENCODINGS = (pa.types.is_dictionary, pa.types.is_run_end_encoded)
 
 

@@ -1,8 +1,4 @@
-"""Test mtsv.integrations.ods against its mapping to ODF 1.3.
-
-Each case names the mapping row it confirms: O-n for writing an ODS
-file, I-n for reading one.
-"""
+"""Test mtsv.integrations.ods against ODF 1.3."""
 
 import io
 import logging
@@ -121,90 +117,102 @@ def round_trip(value):
 
 
 LEFT_BEHIND = [
-    ("I-1", package(table(), entries=["styles.xml"]), SHEET_A),
-    ("I-3", package(table(), document="<office:automatic-styles/>"), SHEET_A),
+    ("styles.xml", package(table(), entries=["styles.xml"]), SHEET_A),
     (
-        "I-5",
+        "office:automatic-styles",
+        package(table(), document="<office:automatic-styles/>"),
+        SHEET_A,
+    ),
+    (
+        "table:structure-protected",
         package(table(), spreadsheet=" table:structure-protected='true'"),
         SHEET_A,
     ),
     (
-        "I-8",
+        "table:style-name of a table",
         package(table(attributes=" table:name='S' table:style-name='ta1'")),
         SHEET_A,
     ),
     (
-        "I-9",
+        "table:title",
         package(table("<table:title>t</table:title>" + COLUMN + row())),
         SHEET_A,
     ),
     (
-        "I-14",
+        "table:style-name of a row",
         package(table(COLUMN + row(attributes=" table:style-name='ro1'"))),
         SHEET_A,
     ),
     (
-        "I-16",
+        "table:table-header-rows",
         package(table(COLUMN + wrap("table:table-header-rows", row()))),
         SHEET_A,
     ),
     (
-        "I-17",
+        "table:table-row-group",
         package(table(COLUMN + wrap("table:table-row-group", row()))),
         SHEET_A,
     ),
     (
-        "I-18",
+        "text:soft-page-break",
         package(table(COLUMN + "<text:soft-page-break/>" + row())),
         SHEET_A,
     ),
     (
-        "I-21",
+        "table:style-name of a column",
         package(
             table("<table:table-column table:style-name='co1'/>" + row())
         ),
         SHEET_A,
     ),
     (
-        "I-23",
+        "table:table-column-group",
         package(table(wrap("table:table-column-group", COLUMN) + row())),
         SHEET_A,
     ),
     (
-        "I-27",
+        "table:covered-table-cell",
         package(table(COLUMN + row("<table:covered-table-cell/>" + cell()))),
         [{"sheet name": "S", "header": ["", "a"], "records": []}],
     ),
     (
-        "I-28",
+        "table:number-columns-spanned",
         one_cell(attributes=STRING + " table:number-columns-spanned='1'"),
         SHEET_A,
     ),
     (
-        "I-30",
+        "office:string-value",
         one_cell(attributes=STRING + " office:string-value='b'"),
         one_value("b"),
     ),
     (
-        "I-31",
+        "office:value-type float",
         one_cell(
             "<text:p>3</text:p>",
             " office:value-type='float' office:value='3'",
         ),
         one_value("3"),
     ),
-    ("I-33", one_cell("<text:h>a</text:h>"), SHEET_A),
+    ("text:h", one_cell("<text:h>a</text:h>"), SHEET_A),
     (
-        "I-35",
+        "table:table in a cell",
         one_cell(
             "<text:p>a</text:p>" + table(COLUMN + row(cell("", "")), "")
         ),
         SHEET_A,
     ),
-    ("I-36", one_cell("<text:p text:style-name='P1'>a</text:p>"), SHEET_A),
-    ("I-41", one_cell("<text:p><text:span>a</text:span></text:p>"), SHEET_A),
     (
-        "I-42",
+        "text:style-name of a paragraph",
+        one_cell("<text:p text:style-name='P1'>a</text:p>"),
+        SHEET_A,
+    ),
+    (
+        "text:span",
+        one_cell("<text:p><text:span>a</text:span></text:p>"),
+        SHEET_A,
+    ),
+    (
+        "text:ruby",
         one_cell(
             "<text:p><text:ruby><text:ruby-base>a</text:ruby-base>"
             "<text:ruby-text>x</text:ruby-text></text:ruby></text:p>"
@@ -212,12 +220,12 @@ LEFT_BEHIND = [
         SHEET_A,
     ),
     (
-        "I-43",
+        "text:bookmark",
         one_cell("<text:p>a<text:bookmark text:name='m'/></text:p>"),
         SHEET_A,
     ),
     (
-        "I-46",
+        "office:value-type float, displayed formatted",
         one_cell(
             "<text:p>2,500</text:p>",
             " office:value-type='float' office:value='2500'",
@@ -225,7 +233,7 @@ LEFT_BEHIND = [
         one_value("2500"),
     ),
     (
-        "I-47",
+        "office:value-type date",
         one_cell(
             "<text:p>Jan-23</text:p>",
             " office:value-type='date' office:date-value='2023-01-15'",
@@ -233,7 +241,7 @@ LEFT_BEHIND = [
         one_value("2023-01-15"),
     ),
     (
-        "I-48",
+        "office:value-type time",
         one_cell(
             "<text:p>12:30 PM</text:p>",
             " office:value-type='time' office:time-value='PT12H30M00S'",
@@ -241,7 +249,7 @@ LEFT_BEHIND = [
         one_value("PT12H30M00S"),
     ),
     (
-        "I-49",
+        "office:value-type boolean",
         one_cell(
             "<text:p>TRUE</text:p>",
             " office:value-type='boolean' office:boolean-value='true'",
@@ -249,7 +257,7 @@ LEFT_BEHIND = [
         one_value("true"),
     ),
     (
-        "I-50",
+        "office:value-type percentage",
         one_cell(
             "<text:p>25%</text:p>",
             " office:value-type='percentage' office:value='0.25'",
@@ -257,7 +265,7 @@ LEFT_BEHIND = [
         one_value("0.25"),
     ),
     (
-        "I-51",
+        "office:value-type currency",
         one_cell(
             "<text:p>$550,000</text:p>",
             " office:value-type='currency' office:value='550000'"
@@ -269,12 +277,12 @@ LEFT_BEHIND = [
 
 MAPPED = [
     (
-        "I-10",
+        "empty cell",
         one_cell("", ""),
         [{"sheet name": "S", "header": None, "records": []}],
     ),
     (
-        "I-11 nameless later table",
+        "later table without table:name",
         package(table() + table(attributes="")),
         [
             {"sheet name": "S", "header": ["a"], "records": []},
@@ -282,12 +290,12 @@ MAPPED = [
         ],
     ),
     (
-        "I-11 nameless empty table",
+        "empty table without table:name",
         package(table(COLUMN + row(cell("", "")), "")),
         [{"sheet name": "", "header": None, "records": []}],
     ),
     (
-        "I-12",
+        "table:number-rows-repeated",
         package(
             table(
                 COLUMN
@@ -301,12 +309,12 @@ MAPPED = [
         [{"sheet name": "S", "header": ["a"], "records": [["b"], ["b"]]}],
     ),
     (
-        "I-15",
+        "table:table-rows",
         package(table(COLUMN + wrap("table:table-rows", row()))),
         SHEET_A,
     ),
     (
-        "I-19",
+        "trailing empty rows",
         package(
             table(
                 COLUMN
@@ -317,7 +325,7 @@ MAPPED = [
         SHEET_A,
     ),
     (
-        "I-20",
+        "table:number-columns-repeated of a column",
         package(
             table(
                 "<table:table-column table:number-columns-repeated='3'/>"
@@ -327,17 +335,17 @@ MAPPED = [
         SHEET_A,
     ),
     (
-        "I-22",
+        "table:table-columns",
         package(table(wrap("table:table-columns", COLUMN) + row())),
         SHEET_A,
     ),
     (
-        "I-24",
+        "table:number-columns-repeated of a cell",
         one_cell(attributes=STRING + " table:number-columns-repeated='2'"),
         [{"sheet name": "S", "header": ["a", "a"], "records": []}],
     ),
     (
-        "I-26",
+        "trailing empty cells",
         package(
             table(
                 COLUMN
@@ -356,40 +364,40 @@ MAPPED = [
             }
         ],
     ),
-    ("I-29", one_cell(attributes=""), SHEET_A),
+    ("cell without office:value-type", one_cell(attributes=""), SHEET_A),
     (
-        "I-37",
+        "white space collapsed",
         one_cell("<text:p>  a <text:s/> b  </text:p>"),
         one_value("a   b"),
     ),
     (
-        "I-38",
+        "text:s with text:c",
         one_cell("<text:p>a<text:s text:c='2'/>b</text:p>"),
         one_value("a  b"),
     ),
     (
-        "I-44 signature in a field",
+        "U+FEFF in a field",
         package(table(COLUMN + row(cell("<text:p>&#xFEFF;a</text:p>")), "")),
         [{"sheet name": "", "header": [chr(0xFEFF) + "a"], "records": []}],
     ),
     (
-        "I-52",
+        "office:value-type void",
         one_cell("", " office:value-type='void'"),
         [{"sheet name": "S", "header": None, "records": []}],
     ),
 ]
 
 ALWAYS = [
-    ("I-2 not a zip", b"not a zip"),
-    ("I-2 no content.xml", archive()),
+    ("not a ZIP file", b"not a zip"),
+    ("no content.xml", archive()),
     (
-        "I-2 wrong root",
+        "not office:document-content",
         archive(
             f"<office:document-styles{NAMESPACES} office:version='1.3'/>"
         ),
     ),
     (
-        "I-4",
+        "not office:spreadsheet",
         archive(
             f"<office:document-content{NAMESPACES} office:version='1.3'>"
             "<office:body><office:text/></office:body>"
@@ -397,28 +405,28 @@ ALWAYS = [
         ),
     ),
     (
-        "I-13",
+        "table:number-rows-repeated 0",
         package(
             table(COLUMN + row(attributes=" table:number-rows-repeated='0'"))
         ),
     ),
     (
-        "I-25",
+        "table:number-columns-repeated 0",
         one_cell(attributes=STRING + " table:number-columns-repeated='0'"),
     ),
-    ("I-34", one_cell("<text:p>a</text:p><text:p>b</text:p>")),
-    ("I-39", one_cell("<text:p>a<text:s text:c='-1'/>b</text:p>")),
-    ("I-40 tab", one_cell("<text:p>a<text:tab/>b</text:p>")),
-    ("I-40 line break", one_cell("<text:p>a<text:line-break/>b</text:p>")),
-    ("I-44 sheet name", package(table(attributes=" table:name='S&#9;S'"))),
+    ("two paragraphs", one_cell("<text:p>a</text:p><text:p>b</text:p>")),
+    ("text:c of -1", one_cell("<text:p>a<text:s text:c='-1'/>b</text:p>")),
+    ("text:tab", one_cell("<text:p>a<text:tab/>b</text:p>")),
+    ("text:line-break", one_cell("<text:p>a<text:line-break/>b</text:p>")),
+    ("tab in table:name", package(table(attributes=" table:name='S&#9;S'"))),
 ]
 
 
 class TestDump(unittest.TestCase):
-    """Writing ODS: rows O-1 to O-11."""
+    """Writing ODS."""
 
     def test_conforming_round_trip(self):
-        """R1: each conforming file survives dump then strict load."""
+        """Each conforming file survives dump then strict load."""
         for path in paths("conforming", ".json"):
             with self.subTest(path.name):
                 value = load_json(path)
@@ -431,14 +439,14 @@ class TestDump(unittest.TestCase):
                     self.assertEqual(round_trip(value), expected)
 
     def test_cannot_be_represented(self):
-        """R2: each file that MTSV cannot hold is refused by dump."""
+        """Each file that MTSV cannot hold is refused by dump."""
         for path in paths("cannot-be-represented", ".json"):
             with self.subTest(path.name):
                 with self.assertRaises(ValueError):
                     ods.dump(load_json(path), io.BytesIO())
 
     def test_package(self):
-        """R6, O-1: the package holds mimetype first, then two files."""
+        """The package holds mimetype first, then two files."""
         buffer = io.BytesIO()
         value = load_json(CONFORMANCE / "conforming" / "multiple-sheets.json")
         ods.dump(value, buffer)
@@ -456,10 +464,10 @@ class TestDump(unittest.TestCase):
 
 
 class TestLoad(unittest.TestCase):
-    """Reading ODS: rows I-1 to I-52."""
+    """Reading ODS."""
 
     def test_left_behind(self):
-        """R3: strict refuses each extra; ignore leaves it behind."""
+        """Strict refuses each extra; ignore leaves it behind."""
         for row_id, data, expected in LEFT_BEHIND:
             with self.subTest(row_id):
                 with self.assertRaises(ValueError):
@@ -468,7 +476,7 @@ class TestLoad(unittest.TestCase):
                 self.assertEqual(result, expected)
 
     def test_mapped(self):
-        """R4: each mapping is read the same in both doors."""
+        """Each mapping is read the same in both doors."""
         for row_id, data, expected in MAPPED:
             for errors in ("strict", "ignore"):
                 with self.subTest(row_id, errors=errors):
@@ -476,7 +484,7 @@ class TestLoad(unittest.TestCase):
                     self.assertEqual(result, expected)
 
     def test_always_refused(self):
-        """R5: each invalid input is refused in both doors."""
+        """Each invalid input is refused in both doors."""
         for row_id, data in ALWAYS:
             for errors in ("strict", "ignore"):
                 with self.subTest(row_id, errors=errors):
@@ -484,7 +492,7 @@ class TestLoad(unittest.TestCase):
                         ods.load(io.BytesIO(data), errors=errors)
 
     def test_unknown_errors_value(self):
-        """R5, I-45: an unknown errors value raises LookupError."""
+        """An unknown errors value raises LookupError."""
         with self.assertRaises(LookupError):
             ods.load(io.BytesIO(package(table())), errors="replace")
 
@@ -493,7 +501,7 @@ class TestMain(unittest.TestCase):
     """The command line: python -m mtsv.integrations.ods."""
 
     def test_converts_both_ways(self):
-        """R6: .mtsv to .ods and back gives the same bytes."""
+        """.mtsv to .ods and back gives the same bytes."""
         original = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
         with tempfile.TemporaryDirectory() as directory:
             spreadsheet = Path(directory, "multiple-sheets.ods")
@@ -503,7 +511,7 @@ class TestMain(unittest.TestCase):
             self.assertEqual(back.read_bytes(), original.read_bytes())
 
     def test_extras_are_reported_not_refused(self):
-        """R6: extras are noted, and --errors strict refuses them."""
+        """Extras are noted, and --errors strict refuses them."""
         data = package(
             table(attributes=" table:name='S' table:style-name='ta1'")
         )
@@ -512,8 +520,10 @@ class TestMain(unittest.TestCase):
             spreadsheet = Path(directory, "styled.ods")
             result = Path(directory, "styled.mtsv")
             spreadsheet.write_bytes(data)
-            with self.assertLogs("mtsv.integrations", logging.WARNING):
+            with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
                 ods.main([str(spreadsheet), str(result)])
             self.assertEqual(result.read_bytes(), expected)
+            record, = logs.records
+            self.assertEqual(record.left_behind, ["table:style-name"])
             with self.assertRaises(SystemExit):
                 ods.main([str(spreadsheet), str(result), "--errors", "strict"])

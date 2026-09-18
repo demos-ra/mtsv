@@ -67,10 +67,9 @@ refuses it instead. A stream carries MTSV, because it has no file
 extension to name another format, and the output must be named where
 there is no name to derive: a stream, or MTSV already.
 
-The ODS and XLSX integrations also have a module form of the same
-conversion, limited to their own format, such as
-`python -m mtsv.integrations.ods`. They carry it because they shipped
-before the command existed.
+The module forms `python -m mtsv.integrations.ods` and
+`python -m mtsv.integrations.xlsx` are deprecated and will be removed
+in 0.5.0; use the `mtsv` command instead.
 
 ## Read and write MTSV
 
@@ -94,7 +93,7 @@ with open("book.mtsv", "wb") as file:
 
 The same sheets, written as JSON (RFC 8259). This is the form the
 conformance results use, so a file written here is the file that sits
-beside every `.mtsv` file in the corpus.
+beside every conforming `.mtsv` file.
 
 ```python
 from mtsv.integrations import json
@@ -119,8 +118,8 @@ with open("book.csv", "rb") as file:
 ```
 
 CSV holds one table and has nowhere to record which sheet it came
-from, so it reads and writes a sheet whose sheet name is empty — the
-same plane a TSV file holds. A file of more than one sheet, whose sheet
+from, so it reads and writes a sheet whose sheet name is empty, as a
+TSV file does. A file of more than one sheet, whose sheet
 name is not empty, or whose sheet has no lines, raises `ValueError`.
 
 ## Spreadsheets (ODS)
@@ -138,8 +137,8 @@ with open("book.ods", "rb") as file:
 From the command line:
 
 ```
-python -m mtsv.integrations.ods book.mtsv book.ods
-python -m mtsv.integrations.ods book.ods book.mtsv
+mtsv book.mtsv book.ods
+mtsv book.ods book.mtsv
 ```
 
 ## Spreadsheets (XLSX)
@@ -157,8 +156,8 @@ with open("book.xlsx", "rb") as file:
 From the command line:
 
 ```
-python -m mtsv.integrations.xlsx book.mtsv book.xlsx
-python -m mtsv.integrations.xlsx book.xlsx book.mtsv
+mtsv book.mtsv book.xlsx
+mtsv book.xlsx book.mtsv
 ```
 
 ## Data tools (Apache Arrow)
@@ -192,6 +191,11 @@ it is passed `errors="ignore"`. The command drops it and names it on
 standard error instead, because the person running it is reading the
 report; `--errors strict` makes the command refuse it too.
 
+The report goes to the `mtsv.integrations` logger at level WARNING, as
+`left behind: a, b`. Its record also carries the names, sorted, as a
+list in its `left_behind` attribute, so a program can collect them with
+a handler of its own.
+
 Two differences are worth knowing. Empty rows and columns at the edge of
 an ODS sheet do not come back, so an ODS sheet of only empty fields comes
 back as an empty sheet; XLSX keeps them, because a workbook may leave a
@@ -207,7 +211,7 @@ text at all, such as binary, a list, or a struct.
 
 | Path                     | Contents                                    |
 |--------------------------|---------------------------------------------|
-| `src/mtsv/`              | the interface, the parser, and the generator |
+| `src/mtsv/`              | the interface, the grammar, the parser, the generator, and the `mtsv` command |
 | `src/mtsv/integrations/` | one module per target standard              |
 | `tests/`                 | the test suite, run against the install     |
 

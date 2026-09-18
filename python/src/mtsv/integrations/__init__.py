@@ -27,14 +27,13 @@ from mtsv.integrations import csv, json, ods, xlsx
 
 _logger = logging.getLogger(__name__)
 
-# The media type registration of MTSV declares this extension, in
-# draft-demosra-mtsv-00, Section 9.1.
+# The draft, Media Type Registration: the file extension of MTSV.
 MTSV = ".mtsv"
 
 # The extension each media type registration declares: "CSV" in
-# Section 5.1 of RFC 7111, ".json" in Section 11 of RFC 8259, "ods"
-# for the OpenDocument spreadsheet type, and "xlsx" for the OOXML
-# spreadsheet type.
+# Section 5.1 of RFC 7111, ".json" in Section 11 of RFC 8259, "ods" in
+# the IANA registration of the OpenDocument spreadsheet type, and
+# "xlsx" in the IANA registration of the OOXML spreadsheet type.
 FORMATS = {".csv": csv, ".json": json, ".ods": ods, ".xlsx": xlsx}
 
 
@@ -69,17 +68,21 @@ def dump(suffix: str, obj: list[dict[str, Any]], fp: BinaryIO, /) -> None:
 def report(extras: set[str], errors: str) -> None:
     """Refuse or note what an integration would leave behind.
 
-    Raise ValueError with errors="strict". Otherwise log a warning.
-    Python logging HOWTO, 295-299: a logger's warning() "if there is
+    Raise ValueError with errors="strict". Otherwise log a warning
+    whose record carries the sorted names in its left_behind attribute.
+
+    Python logging HOWTO, 100-102: a logger's warning() "if there is
     nothing the client application can do about the situation, but
-    the event should still be noted".
+    the event should still be noted". logging, 323-326: extra
+    populates the LogRecord "with user-defined attributes".
     """
     if not extras:
         return
-    names = ", ".join(sorted(extras))
+    names = sorted(extras)
+    joined = ", ".join(names)
     if errors == "strict":
-        raise ValueError(f"these would be left behind: {names}")
-    _logger.warning("left behind: %s", names)
+        raise ValueError(f"these would be left behind: {joined}")
+    _logger.warning("left behind: %s", joined, extra={"left_behind": names})
 
 
 def _errors(errors: str) -> None:
@@ -91,8 +94,8 @@ def _errors(errors: str) -> None:
 def _sheet(name: str, lines: list[list[str]]) -> dict[str, Any]:
     """Return a sheet whose lines are padded to the widest line.
 
-    draft-demosra-mtsv-01, Section 3: every record in a sheet has as
-    many fields as the header of that sheet.
+    The draft, Data Model: every record in a sheet has as many fields
+    as the header of that sheet.
     """
     if not lines:
         return {"sheet name": name, "header": None, "records": []}

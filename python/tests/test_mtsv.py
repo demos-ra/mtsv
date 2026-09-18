@@ -29,7 +29,7 @@ class TestLoad(unittest.TestCase):
 
 
 class TestDumps(unittest.TestCase):
-    """dumps, which writes the data model of Section 3."""
+    """dumps, which writes the data model (the draft, Data Model)."""
 
     def test_sheet_name_is_text(self):
         """A sheet name that is not text raises ValueError."""

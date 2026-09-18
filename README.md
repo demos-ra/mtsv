@@ -13,12 +13,12 @@ implementations.
 | Folder         | Contents                                                |
 |----------------|---------------------------------------------------------|
 | `conformance/` | Test files shared by every implementation               |
-| `python/`      | Python implementation, with CSV, JSON, ODS, XLSX and Apache Arrow integrations |
+| `python/`      | Python implementation, with the `mtsv` command and CSV, JSON, ODS, XLSX and Apache Arrow integrations |
 
 Each language folder holds one implementation of the specification: a parser
-and a generator. Integrations connect an implementation to other standards.
-Conformance is the same for every language, so it sits beside them rather
-than inside one.
+and a generator. Integrations connect an implementation to other standards,
+and a command lets a person use it from a terminal. Conformance is the same
+for every language, so it sits beside them rather than inside one.
 
 ## Conformance
 

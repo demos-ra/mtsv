@@ -1,10 +1,7 @@
-"""Test mtsv.integrations.json against RFC 8259 and the corpus.
-
-The conformance corpus holds the result of every parse as JSON, so
-the same sheets must give the same bytes as the file beside them.
-"""
+"""Test mtsv.integrations.json against RFC 8259 and conformance."""
 
 import io
+import logging
 import unittest
 
 from mtsv.integrations import json
@@ -18,7 +15,7 @@ EXPECTED = [{"sheet name": "", "header": ["a"], "records": []}]
 class TestDump(unittest.TestCase):
     """Writing JSON."""
 
-    def test_conforming_matches_the_corpus(self):
+    def test_conforming_matches_the_files(self):
         """Each result gives the bytes of the file beside it."""
         for path in paths("conforming", ".json"):
             with self.subTest(path.name):
@@ -46,7 +43,7 @@ class TestLoad(unittest.TestCase):
 
     def test_encoding_signature(self):
         """RFC 8259, 8.1: a parser may ignore a byte order mark."""
-        data = "﻿".encode("utf-8") + SHEET
+        data = chr(0xFEFF).encode("utf-8") + SHEET
         self.assertEqual(json.load(io.BytesIO(data)), EXPECTED)
 
     def test_not_json(self):
@@ -56,12 +53,15 @@ class TestLoad(unittest.TestCase):
 
     def test_member_outside_the_data_model(self):
         """A member outside the three is left behind, not kept."""
-        data = b'[{"sheet name":"","header":["a"],"records":[],"x":1}]'
+        data = b'[{"sheet name":"","header":["a"],"records":[],"y":1,"x":2}]'
         with self.assertRaises(ValueError):
             json.load(io.BytesIO(data))
-        self.assertEqual(
-            json.load(io.BytesIO(data), errors="ignore"), EXPECTED
-        )
+        with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
+            result = json.load(io.BytesIO(data), errors="ignore")
+        self.assertEqual(result, EXPECTED)
+        record, = logs.records
+        self.assertEqual(record.left_behind, ["x", "y"])
+        self.assertEqual(record.getMessage(), "left behind: x, y")
 
     def test_a_field_is_a_string(self):
         """A field that is not a JSON string raises ValueError."""

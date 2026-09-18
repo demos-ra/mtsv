@@ -1,8 +1,4 @@
-"""Test mtsv.integrations.xlsx against its mapping to ISO/IEC 29500.
-
-Each case names the mapping row it confirms: O-n for writing an XLSX
-file, I-n for reading one.
-"""
+"""Test mtsv.integrations.xlsx against ISO/IEC 29500."""
 
 import io
 import logging
@@ -167,55 +163,55 @@ def round_trip(value):
 
 
 def refused(value):
-    """Return whether XLSX cannot hold these sheets, per O-4."""
+    """Return whether XLSX cannot hold these sheets: no sheets."""
     return not value
 
 
 LEFT_BEHIND = [
     (
-        "I-4",
+        "calcPr",
         package(entries=sheet(), children="<calcPr calcId='1'/>"),
         SHEET_A,
     ),
     (
-        "I-5",
+        "state of a sheet",
         package(entries=sheet(attributes=" state='hidden'")),
         SHEET_A,
     ),
     (
-        "I-6",
+        "dimension",
         package([worksheet(row(), "<dimension ref='A1'/>")]),
         SHEET_A,
     ),
     (
-        "I-6 root attribute",
+        "attribute of a worksheet",
         package([worksheet(row(), attributes=" x='1'")]),
         SHEET_A,
     ),
     (
-        "I-10",
+        "style of a cell",
         package([worksheet(row(cell(attributes=" t='inlineStr' s='1'")))]),
         SHEET_A,
     ),
     (
-        "I-14",
+        "cell type n",
         package([worksheet(row(cell("<v>23</v>", attributes=" t='n'")))]),
         one_value("23"),
     ),
     (
-        "I-15",
+        "cell type b",
         package([worksheet(row(cell("<v>1</v>", attributes=" t='b'")))]),
         one_value("1"),
     ),
     (
-        "I-16",
+        "cell type e",
         package(
             [worksheet(row(cell("<v>#DIV/0!</v>", attributes=" t='e'")))]
         ),
         one_value("#DIV/0!"),
     ),
     (
-        "I-17",
+        "formula",
         package(
             [
                 worksheet(
@@ -230,14 +226,14 @@ LEFT_BEHIND = [
         one_value("2"),
     ),
     (
-        "I-18",
+        "run properties",
         package(
             [worksheet(row(cell("<is><r><rPr/><t>a</t></r></is>")))]
         ),
         SHEET_A,
     ),
     (
-        "I-8 spans",
+        "spans of a row",
         package([worksheet(row(attributes=" spans='1:1'"))]),
         SHEET_A,
     ),
@@ -245,7 +241,7 @@ LEFT_BEHIND = [
 
 MAPPED = [
     (
-        "I-3",
+        "two sheets, in order",
         package(
             [worksheet(row()), worksheet(row(cell("<is><t>b</t></is>")))],
             sheet("S", 1) + sheet("T", 2),
@@ -256,24 +252,24 @@ MAPPED = [
         ],
     ),
     (
-        "I-7",
+        "sheetData without rows",
         package([worksheet()]),
         [{"sheet name": "S", "header": None, "records": []}],
     ),
     (
-        "I-8",
+        "row without r",
         package([worksheet(f"<row>{cell()}</row>")]),
         SHEET_A,
     ),
     (
-        "I-9",
+        "cell at C1",
         package(
             [worksheet(row(cell(reference="C1")))]
         ),
         [{"sheet name": "S", "header": ["", "", "a"], "records": []}],
     ),
     (
-        "I-11",
+        "shared string",
         package(
             [worksheet(row(cell("<v>0</v>", attributes=" t='s'")))],
             table=strings("<si><t>a</t></si>"),
@@ -281,24 +277,24 @@ MAPPED = [
         SHEET_A,
     ),
     (
-        "I-12",
+        "inline string",
         package([worksheet(row())]),
         SHEET_A,
     ),
     (
-        "I-13",
+        "cell type str",
         package([worksheet(row(cell("<v>a</v>", attributes=" t='str'")))]),
         SHEET_A,
     ),
     (
-        "I-18 runs",
+        "runs of rich text",
         package(
             [worksheet(row(cell("<is><r><t>a</t></r><r><t>b</t></r></is>")))]
         ),
         one_value("ab"),
     ),
     (
-        "I-9 no trimming",
+        "empty cell kept",
         package(
             [
                 worksheet(
@@ -308,9 +304,9 @@ MAPPED = [
         ),
         [{"sheet name": "S", "header": ["a", ""], "records": []}],
     ),
-    ("I-1 absolute target", package(prefix="/xl/"), SHEET_A),
+    ("absolute Target", package(prefix="/xl/"), SHEET_A),
     (
-        "I-6 compatibility attribute",
+        "mc:Ignorable",
         package(
             [
                 worksheet(
@@ -321,43 +317,43 @@ MAPPED = [
         SHEET_A,
     ),
     (
-        "I-9 reversed",
+        "cells out of order",
         package([worksheet(row(cell("<is><t>b</t></is>", "B1") + cell()))]),
         [{"sheet name": "S", "header": ["a", "b"], "records": []}],
     ),
 ]
 
 ALWAYS = [
-    ("I-2 not a zip", b"not a zip"),
-    ("I-1 target with a scheme", package(prefix="http://example.com/")),
-    ("I-2 no workbook", package(extra=["extra.xml"])[:20]),
-    ("I-9 column twice", package([worksheet(row(cell() + cell()))])),
+    ("not a ZIP file", b"not a zip"),
+    ("Target with a scheme", package(prefix="http://example.com/")),
+    ("truncated package", package(extra=["extra.xml"])[:20]),
+    ("column given twice", package([worksheet(row(cell() + cell()))])),
     (
-        "I-11 index past the table",
+        "shared string index past the table",
         package(
             [worksheet(row(cell("<v>1</v>", attributes=" t='s'")))],
             table=strings("<si><t>a</t></si>"),
         ),
     ),
     (
-        "I-11 negative index",
+        "negative shared string index",
         package(
             [worksheet(row(cell("<v>-1</v>", attributes=" t='s'")))],
             table=strings("<si><t>a</t></si>"),
         ),
     ),
     (
-        "I-44 sheet name",
+        "tab in a sheet name",
         package(entries=sheet(name="S&#9;S")),
     ),
 ]
 
 
 class TestDump(unittest.TestCase):
-    """Writing XLSX: rows O-1 to O-7."""
+    """Writing XLSX."""
 
     def test_conforming_round_trip(self):
-        """R1: each conforming file round trips, or is refused."""
+        """Each conforming file round trips, or is refused."""
         for path in paths("conforming", ".json"):
             with self.subTest(path.name):
                 value = load_json(path)
@@ -368,31 +364,33 @@ class TestDump(unittest.TestCase):
                     self.assertEqual(round_trip(value), value)
 
     def test_cannot_be_represented(self):
-        """R2: each file that MTSV cannot hold is refused by dump."""
+        """Each file that MTSV cannot hold is refused by dump."""
         for path in paths("cannot-be-represented", ".json"):
             with self.subTest(path.name):
                 with self.assertRaises(ValueError):
                     xlsx.dump(load_json(path), io.BytesIO())
 
     def test_no_sheets(self):
-        """O-4: a file of no sheets cannot be represented."""
+        """A file of no sheets cannot be represented."""
         with self.assertRaises(ValueError):
             xlsx.dump([], io.BytesIO())
 
     def test_xml_forbidden(self):
-        """O-6: a character XML 1.0 forbids cannot be represented."""
+        """A character XML 1.0 forbids cannot be represented."""
         for value in FORBIDDEN:
             with self.subTest(repr(value)):
-                field = [{"sheet name": "S", "header": [value],
-                          "records": []}]
-                name = [{"sheet name": value, "header": ["a"],
-                         "records": []}]
+                field = [
+                    {"sheet name": "S", "header": [value], "records": []}
+                ]
+                name = [
+                    {"sheet name": value, "header": ["a"], "records": []}
+                ]
                 for sheets in (field, name):
                     with self.assertRaises(ValueError):
                         xlsx.dump(sheets, io.BytesIO())
 
     def test_wider_than_the_grid(self):
-        """O-5: a sheet wider than column XFD is refused."""
+        """Part 1, 18.17.5.1: a sheet past column XFD is refused."""
         value = [
             {
                 "sheet name": "S",
@@ -404,7 +402,7 @@ class TestDump(unittest.TestCase):
             xlsx.dump(value, io.BytesIO())
 
     def test_package(self):
-        """R6, O-1: the package holds the parts the mapping names."""
+        """The package holds the parts the workbook needs."""
         buffer = io.BytesIO()
         value = load_json(CONFORMANCE / "conforming" / "multiple-sheets.json")
         xlsx.dump(value, buffer)
@@ -424,10 +422,10 @@ class TestDump(unittest.TestCase):
 
 
 class TestLoad(unittest.TestCase):
-    """Reading XLSX: rows I-1 to I-18."""
+    """Reading XLSX."""
 
     def test_left_behind(self):
-        """R3: strict refuses each extra; ignore leaves it behind."""
+        """Strict refuses each extra; ignore leaves it behind."""
         for row_id, data, expected in LEFT_BEHIND:
             with self.subTest(row_id):
                 with self.assertRaises(ValueError):
@@ -436,7 +434,7 @@ class TestLoad(unittest.TestCase):
                 self.assertEqual(result, expected)
 
     def test_mapped(self):
-        """R4: each mapping is read the same in both doors."""
+        """Each mapping is read the same in both doors."""
         for row_id, data, expected in MAPPED:
             for errors in ("strict", "ignore"):
                 with self.subTest(row_id, errors=errors):
@@ -444,7 +442,7 @@ class TestLoad(unittest.TestCase):
                     self.assertEqual(result, expected)
 
     def test_always_refused(self):
-        """R5: each invalid input is refused in both doors."""
+        """Each invalid input is refused in both doors."""
         for row_id, data in ALWAYS:
             for errors in ("strict", "ignore"):
                 with self.subTest(row_id, errors=errors):
@@ -452,7 +450,7 @@ class TestLoad(unittest.TestCase):
                         xlsx.load(io.BytesIO(data), errors=errors)
 
     def test_unknown_errors_value(self):
-        """R5: an unknown errors value raises LookupError."""
+        """An unknown errors value raises LookupError."""
         with self.assertRaises(LookupError):
             xlsx.load(io.BytesIO(package()), errors="replace")
 
@@ -461,7 +459,7 @@ class TestMain(unittest.TestCase):
     """The command line: python -m mtsv.integrations.xlsx."""
 
     def test_converts_both_ways(self):
-        """R6: .mtsv to .xlsx and back gives the same bytes."""
+        """.mtsv to .xlsx and back gives the same bytes."""
         original = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
         with tempfile.TemporaryDirectory() as directory:
             book = Path(directory, "multiple-sheets.xlsx")
@@ -471,15 +469,17 @@ class TestMain(unittest.TestCase):
             self.assertEqual(back.read_bytes(), original.read_bytes())
 
     def test_extras_are_reported_not_refused(self):
-        """R6: extras are noted, and --errors strict refuses them."""
+        """Extras are noted, and --errors strict refuses them."""
         data = package(entries=sheet(attributes=" state='hidden'"))
         expected = bytes([0x0C]) + b"S" + bytes([0x0A]) + b"a" + bytes([0x0A])
         with tempfile.TemporaryDirectory() as directory:
             book = Path(directory, "hidden.xlsx")
             result = Path(directory, "hidden.mtsv")
             book.write_bytes(data)
-            with self.assertLogs("mtsv.integrations", logging.WARNING):
+            with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
                 xlsx.main([str(book), str(result)])
             self.assertEqual(result.read_bytes(), expected)
+            record, = logs.records
+            self.assertEqual(record.left_behind, ["state"])
             with self.assertRaises(SystemExit):
                 xlsx.main([str(book), str(result), "--errors", "strict"])

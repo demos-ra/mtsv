@@ -1,8 +1,4 @@
-"""Test mtsv.integrations.csv against RFC 4180 and RFC 7111.
-
-CSV holds one table, so the sheet it reads and writes is a sheet whose
-sheet name is empty, which is the plane a TSV file holds.
-"""
+"""Test mtsv.integrations.csv against RFC 4180 and RFC 7111."""
 
 import io
 import unittest

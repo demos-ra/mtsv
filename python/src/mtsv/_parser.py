@@ -1,12 +1,9 @@
-"""Parse MTSV text, following draft-demosra-mtsv-01, Section 5."""
+"""Parse MTSV text, following the draft, Parsers."""
 
 from typing import Any
 
-HTAB = chr(0x09)
-LF = chr(0x0A)
-FF = chr(0x0C)
-CR = chr(0x0D)
-CRLF = CR + LF
+from mtsv._grammar import CRLF, FF, HTAB, LF, field_char
+
 SIGNATURE = chr(0xFEFF)
 
 
@@ -40,7 +37,7 @@ def mtsv_file(src: str, pos: int) -> tuple[int, list[dict[str, Any]]]:
     """Parse: mtsv-file = first-sheet *named-sheet.
 
     Skip a U+FEFF at the start of the file, which is an encoding
-    signature (Section 5).
+    signature (the draft, Parsers).
     """
     if pos == 0 and src.startswith(SIGNATURE):
         pos = 1
@@ -130,12 +127,6 @@ def sheet_name(src: str, pos: int) -> tuple[int, str]:
     while pos < len(src) and field_char(src[pos]):
         pos += 1
     return pos, src[start:pos]
-
-
-def field_char(char: str) -> bool:
-    """Match: field-char = %x00-08 / %x0B / %x0E-10FFFF."""
-    code = ord(char)
-    return 0x00 <= code <= 0x08 or code == 0x0B or 0x0E <= code <= 0x10FFFF
 
 
 def eol(src: str, pos: int) -> tuple[int, str]:

@@ -41,7 +41,7 @@ def run(
     parser.add_argument("input", type=Path)
     parser.add_argument("operand", type=Path, nargs="?", metavar="output")
     parser.add_argument("-o", "--output", type=Path)
-    # Python logging HOWTO, 336-340: WARNING, "The software is still
+    # Python logging HOWTO, 120-121: WARNING, "The software is still
     # working as expected."
     parser.add_argument(
         "-e", "--errors", choices=["strict", "ignore"], default="ignore"
@@ -59,7 +59,7 @@ def run(
     if source not in formats or target not in formats:
         names = ", ".join(formats)
         parser.error(f"the file extensions must be two of {names}")
-    # Python logging HOWTO, 1335-1340: the configuration of handlers is
+    # Python logging HOWTO, 717-722: the configuration of handlers is
     # the prerogative of the application developer. GNU Coding
     # Standards 4.4 gives the format.
     logging.basicConfig(format=f"{prog}: %(message)s", force=True)
@@ -108,7 +108,7 @@ def _epilog() -> str:
         label, address = entry.split(",", 1)
         urls[label.strip()] = address.strip()
     return (
-        f"Report bugs at: <{urls['issues']}>\n"
+        f"Report bugs to: <{urls['issues']}>\n"
         f"mtsv home page: <{urls['source']}>"
     )
 

@@ -52,7 +52,7 @@ class TestConforming(unittest.TestCase):
 class TestNonConforming(unittest.TestCase):
     """Non-conforming files: parsers may accept or reject them.
 
-    This implementation rejects them, following RFC 9413.
+    This implementation rejects them, following RFC 9413, 5.1.
     """
 
     def test_parse_rejects(self):

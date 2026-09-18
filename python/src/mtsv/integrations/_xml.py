@@ -1,4 +1,4 @@
-"""Match XML 1.0 characters, for the ODS and XLSX integrations."""
+"""XML 1.0 characters and namespace names, for ODS and XLSX."""
 
 from typing import Any
 from xml.etree import ElementTree
@@ -20,7 +20,7 @@ def check_chars(sheets: list[dict[str, Any]], format_name: str) -> None:
 
 
 def char(c: str) -> bool:
-    """Match XML 1.0 Char.
+    """Match XML 1.0 Char, 2.2, production [2].
 
     Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD]
              | [#x10000-#x10FFFF]
@@ -35,7 +35,11 @@ def char(c: str) -> bool:
 
 
 def prefixed(name: str, prefixes: dict[str, str]) -> str:
-    """Return {namespace}local as prefix:local for known prefixes."""
+    """Return {namespace}local as prefix:local for known prefixes.
+
+    Namespaces in XML 1.0, 2.1: an expanded name is a pair of a
+    namespace name and a local name.
+    """
     if not name.startswith("{"):
         return name
     namespace, local = name[1:].split("}", 1)
