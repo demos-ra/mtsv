@@ -59,7 +59,7 @@ class TestLoad(unittest.TestCase):
         with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
             result = json.load(io.BytesIO(data), errors="ignore")
         self.assertEqual(result, EXPECTED)
-        record, = logs.records
+        (record,) = logs.records
         self.assertEqual(record.left_behind, ["x", "y"])
         self.assertEqual(record.getMessage(), "left behind: x, y")
 

@@ -27,7 +27,7 @@ ARROW_LEAVES_BEHIND = {
 
 
 def scalar_types():
-    """Types whose slots hold one scalar, and so have a text form."""
+    """Types whose slots hold one scalar."""
     return {
         "null": pa.null(),
         "boolean": pa.bool_(),
@@ -90,7 +90,7 @@ def column(values, data_type=None, metadata=None):
 def empty_column(data_type):
     """Build a table of one column of the given type, without rows.
 
-    pyarrow builds no empty union array, so a union column holds a row.
+    A union column holds one row.
     """
     if pa.types.is_union(data_type):
         values = pa.UnionArray.from_dense(
@@ -142,9 +142,7 @@ class TestToArrow(unittest.TestCase):
             with self.subTest(path.name):
                 value = load_json(path)
                 for sheet, (name, table) in zip(value, arrow.to_arrow(value)):
-                    self.assertEqual(
-                        table.column_names, sheet["header"] or []
-                    )
+                    self.assertEqual(table.column_names, sheet["header"] or [])
 
     def test_columns_are_text(self):
         """Every column has the Utf8 type."""
@@ -165,7 +163,7 @@ class TestToArrow(unittest.TestCase):
     def test_empty_sheet_has_no_columns(self):
         """An empty sheet gives a table without columns."""
         value = [{"sheet name": "S", "header": None, "records": []}]
-        (name, table), = arrow.to_arrow(value)
+        ((name, table),) = arrow.to_arrow(value)
         self.assertEqual((table.num_columns, table.num_rows), (0, 0))
 
 
@@ -195,7 +193,7 @@ class TestFromArrow(unittest.TestCase):
         )
 
     def test_name_is_text(self):
-        """A pair named None is refused, as every sheet has a name."""
+        """A pair named None is refused."""
         with self.assertRaises(ValueError):
             arrow.from_arrow([(None, column(["x"]))])
 
@@ -224,13 +222,11 @@ class TestFromArrow(unittest.TestCase):
         with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
             result = arrow.from_arrow([("S", table)], errors="ignore")
         self.assertEqual(result, one_cell("x"))
-        record, = logs.records
+        (record,) = logs.records
         names = record.left_behind
         self.assertTrue(names)
         self.assertEqual(names, sorted(names))
-        self.assertEqual(
-            record.getMessage(), "left behind: " + ", ".join(names)
-        )
+        self.assertEqual(record.getMessage(), "left behind: " + ", ".join(names))
 
     def test_column_metadata_needs_confirmation(self):
         """Metadata of a field is left behind."""
@@ -242,7 +238,7 @@ class TestFromArrow(unittest.TestCase):
         )
 
     def test_extension_type_needs_confirmation(self):
-        """An extension type is field metadata, so it is left behind."""
+        """An extension type is left behind."""
         table = column(["x"], metadata={"ARROW:extension:name": "uuid"})
         with self.assertRaises(ValueError):
             arrow.from_arrow([("S", table)])
@@ -268,9 +264,7 @@ class TestFromArrow(unittest.TestCase):
     def test_nullable_is_not_left_behind(self):
         """A nullable field describes the field, not a value."""
         field = pa.field("a", pa.string(), nullable=True)
-        table = pa.Table.from_arrays(
-            [pa.array(["x"])], schema=pa.schema([field])
-        )
+        table = pa.Table.from_arrays([pa.array(["x"])], schema=pa.schema([field]))
         self.assertEqual(arrow.from_arrow([("S", table)]), one_cell("x"))
 
     def test_text_types_are_text(self):
@@ -278,9 +272,7 @@ class TestFromArrow(unittest.TestCase):
         for data_type in (pa.string(), pa.large_string(), pa.string_view()):
             with self.subTest(str(data_type)):
                 table = column(["x"], data_type)
-                self.assertEqual(
-                    arrow.from_arrow([("S", table)]), one_cell("x")
-                )
+                self.assertEqual(arrow.from_arrow([("S", table)]), one_cell("x"))
 
     def test_encodings_are_transparent(self):
         """A dictionary or run-end encoding of text holds text."""
@@ -294,9 +286,7 @@ class TestFromArrow(unittest.TestCase):
         ):
             with self.subTest(label):
                 table = pa.Table.from_arrays([values], names=["a"])
-                self.assertEqual(
-                    arrow.from_arrow([("S", table)]), one_cell("x")
-                )
+                self.assertEqual(arrow.from_arrow([("S", table)]), one_cell("x"))
 
     def test_ordering_needs_confirmation(self):
         """The orderedness of a dictionary is left behind."""
@@ -349,7 +339,7 @@ class TestFromArrow(unittest.TestCase):
     def test_text_form_of_a_duration(self):
         """A type Arrow may not cast still comes back as text."""
         table = column([datetime.timedelta(seconds=1)], pa.duration("s"))
-        sheet, = arrow.from_arrow([("S", table)], errors="ignore")
+        (sheet,) = arrow.from_arrow([("S", table)], errors="ignore")
         value = sheet["records"][0][0]
         self.assertIsInstance(value, str)
         self.assertTrue(value)

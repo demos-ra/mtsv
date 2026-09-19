@@ -1,11 +1,8 @@
 """Test mtsv.integrations.xlsx against ISO/IEC 29500."""
 
 import io
-import logging
-import tempfile
 import unittest
 import zipfile
-from pathlib import Path
 
 from mtsv.integrations import xlsx
 
@@ -17,12 +14,10 @@ CONTENT_TYPES = "http://schemas.openxmlformats.org/package/2006/content-types"
 RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationships"
 RELATIONSHIP_TYPE = "application/vnd.openxmlformats-package.relationships+xml"
 WORKBOOK_TYPE = (
-    "application/vnd.openxmlformats-officedocument"
-    ".spreadsheetml.sheet.main+xml"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"
 )
 WORKSHEET_TYPE = (
-    "application/vnd.openxmlformats-officedocument"
-    ".spreadsheetml.worksheet+xml"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
 )
 OFFICE_DOCUMENT_REL = R + "/officeDocument"
 WORKSHEET_REL = R + "/worksheet"
@@ -85,10 +80,7 @@ def workbook_relationships(count, table=False, prefix=""):
 
 def sheet(name="S", index=1, attributes=""):
     """Return one sheet entry of a workbook."""
-    return (
-        f"<sheet name='{name}' sheetId='{index}'"
-        f" r:id='rId{index}'{attributes}/>"
-    )
+    return f"<sheet name='{name}' sheetId='{index}' r:id='rId{index}'{attributes}/>"
 
 
 def workbook(entries=None, children=""):
@@ -126,9 +118,7 @@ def strings(items):
     return f"<sst xmlns='{MAIN}'>{items}</sst>"
 
 
-def package(
-    sheets=None, entries=None, children="", table=None, extra=(), prefix=""
-):
+def package(sheets=None, entries=None, children="", table=None, extra=(), prefix=""):
     """Return an .xlsx file, as bytes, holding the given parts."""
     sheets = [worksheet(row())] if sheets is None else sheets
     buffer = io.BytesIO()
@@ -163,8 +153,12 @@ def round_trip(value):
 
 
 def refused(value):
-    """Return whether XLSX cannot hold these sheets: no sheets."""
-    return not value
+    """Return whether XLSX cannot hold these sheets.
+
+    No sheets, or a sheet name given twice.
+    """
+    names = [sheet["sheet name"] for sheet in value]
+    return not value or len(set(names)) != len(names)
 
 
 LEFT_BEHIND = [
@@ -205,31 +199,17 @@ LEFT_BEHIND = [
     ),
     (
         "cell type e",
-        package(
-            [worksheet(row(cell("<v>#DIV/0!</v>", attributes=" t='e'")))]
-        ),
+        package([worksheet(row(cell("<v>#DIV/0!</v>", attributes=" t='e'")))]),
         one_value("#DIV/0!"),
     ),
     (
         "formula",
-        package(
-            [
-                worksheet(
-                    row(
-                        cell(
-                            "<f>1+1</f><v>2</v>", attributes=" t='str'"
-                        )
-                    )
-                )
-            ]
-        ),
+        package([worksheet(row(cell("<f>1+1</f><v>2</v>", attributes=" t='str'")))]),
         one_value("2"),
     ),
     (
         "run properties",
-        package(
-            [worksheet(row(cell("<is><r><rPr/><t>a</t></r></is>")))]
-        ),
+        package([worksheet(row(cell("<is><r><rPr/><t>a</t></r></is>")))]),
         SHEET_A,
     ),
     (
@@ -263,9 +243,7 @@ MAPPED = [
     ),
     (
         "cell at C1",
-        package(
-            [worksheet(row(cell(reference="C1")))]
-        ),
+        package([worksheet(row(cell(reference="C1")))]),
         [{"sheet name": "S", "header": ["", "", "a"], "records": []}],
     ),
     (
@@ -288,32 +266,18 @@ MAPPED = [
     ),
     (
         "runs of rich text",
-        package(
-            [worksheet(row(cell("<is><r><t>a</t></r><r><t>b</t></r></is>")))]
-        ),
+        package([worksheet(row(cell("<is><r><t>a</t></r><r><t>b</t></r></is>")))]),
         one_value("ab"),
     ),
     (
         "empty cell kept",
-        package(
-            [
-                worksheet(
-                    row(cell() + cell("", "B1", attributes=""))
-                )
-            ]
-        ),
+        package([worksheet(row(cell() + cell("", "B1", attributes="")))]),
         [{"sheet name": "S", "header": ["a", ""], "records": []}],
     ),
     ("absolute Target", package(prefix="/xl/"), SHEET_A),
     (
         "mc:Ignorable",
-        package(
-            [
-                worksheet(
-                    row(), attributes=f" xmlns:mc='{MC}' mc:Ignorable=''"
-                )
-            ]
-        ),
+        package([worksheet(row(), attributes=f" xmlns:mc='{MC}' mc:Ignorable=''")]),
         SHEET_A,
     ),
     (
@@ -379,12 +343,8 @@ class TestDump(unittest.TestCase):
         """A character XML 1.0 forbids cannot be represented."""
         for value in FORBIDDEN:
             with self.subTest(repr(value)):
-                field = [
-                    {"sheet name": "S", "header": [value], "records": []}
-                ]
-                name = [
-                    {"sheet name": value, "header": ["a"], "records": []}
-                ]
+                field = [{"sheet name": "S", "header": [value], "records": []}]
+                name = [{"sheet name": value, "header": ["a"], "records": []}]
                 for sheets in (field, name):
                     with self.assertRaises(ValueError):
                         xlsx.dump(sheets, io.BytesIO())
@@ -453,33 +413,3 @@ class TestLoad(unittest.TestCase):
         """An unknown errors value raises LookupError."""
         with self.assertRaises(LookupError):
             xlsx.load(io.BytesIO(package()), errors="replace")
-
-
-class TestMain(unittest.TestCase):
-    """The command line: python -m mtsv.integrations.xlsx."""
-
-    def test_converts_both_ways(self):
-        """.mtsv to .xlsx and back gives the same bytes."""
-        original = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
-        with tempfile.TemporaryDirectory() as directory:
-            book = Path(directory, "multiple-sheets.xlsx")
-            back = Path(directory, "multiple-sheets.mtsv")
-            xlsx.main([str(original), str(book)])
-            xlsx.main([str(book), str(back)])
-            self.assertEqual(back.read_bytes(), original.read_bytes())
-
-    def test_extras_are_reported_not_refused(self):
-        """Extras are noted, and --errors strict refuses them."""
-        data = package(entries=sheet(attributes=" state='hidden'"))
-        expected = bytes([0x0C]) + b"S" + bytes([0x0A]) + b"a" + bytes([0x0A])
-        with tempfile.TemporaryDirectory() as directory:
-            book = Path(directory, "hidden.xlsx")
-            result = Path(directory, "hidden.mtsv")
-            book.write_bytes(data)
-            with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
-                xlsx.main([str(book), str(result)])
-            self.assertEqual(result.read_bytes(), expected)
-            record, = logs.records
-            self.assertEqual(record.left_behind, ["state"])
-            with self.assertRaises(SystemExit):
-                xlsx.main([str(book), str(result), "--errors", "strict"])

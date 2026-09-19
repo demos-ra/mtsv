@@ -67,9 +67,8 @@ refuses it instead. A stream carries MTSV, because it has no file
 extension to name another format, and the output must be named where
 there is no name to derive: a stream, or MTSV already.
 
-The module forms `python -m mtsv.integrations.ods` and
-`python -m mtsv.integrations.xlsx` are deprecated and will be removed
-in 0.5.0; use the `mtsv` command instead.
+`mtsv.integrations.FORMATS` is deprecated and will be removed in
+0.6.0; use `mtsv.integrations.lookup` instead.
 
 ## Read and write MTSV
 
@@ -177,9 +176,9 @@ MTSV holds sheets, names, rows, and text. Everything else is left at the
 door, and each door reports what it dropped.
 
 Going out, ODS and XLSX both raise `ValueError` for a character that XML
-1.0 does not allow. XLSX also raises for a file with no sheets, and for a
-sheet wider than 16,384 columns or longer than 1,048,576 rows, because a
-workbook holds none of those. CSV raises for a file of more than one
+1.0 does not allow. XLSX also raises for a file with no sheets, for two
+sheets with one sheet name, and for a sheet wider than 16,384 columns or
+longer than 1,048,576 rows, because a workbook holds none of those. CSV raises for a file of more than one
 sheet, whose sheet name is not empty, or whose sheet has no lines,
 because CSV holds one table of at least one record and no sheet name.
 JSON holds everything MTSV holds, so it refuses nothing.
@@ -209,11 +208,27 @@ text at all, such as binary, a list, or a struct.
 
 ## Layout
 
-| Path                     | Contents                                    |
-|--------------------------|---------------------------------------------|
-| `src/mtsv/`              | the interface, the grammar, the parser, the generator, and the `mtsv` command |
-| `src/mtsv/integrations/` | one module per target standard              |
-| `tests/`                 | the test suite, run against the install     |
+Each module hides one decision, named beside it. "core" and "command"
+are groups of files in `src/mtsv/`, not folders.
+
+```
+src/mtsv/
+  core
+    _grammar       which characters MTSV uses
+    _parser        how text becomes sheets
+    _generator     how sheets become text
+    __init__       the public shape: dump, dumps, load, loads
+  integrations/
+    _xml           what XML 1.0 allows in names and characters
+    _sheet         how the lines of a table become a sheet
+    _errors        the errors values, and how loss is reported
+    csv · json · ods · xlsx · arrow     one outside format each
+    __init__       which extension names which format
+  command
+    _command       how a person runs a conversion
+    __main__       the mtsv entry point
+tests/             one test file per module above
+```
 
 ## Test
 

@@ -26,7 +26,7 @@ class TestDump(unittest.TestCase):
             csv.dump([], io.BytesIO())
 
     def test_more_than_one_sheet(self):
-        """CSV holds one table, so two sheets are refused."""
+        """Two sheets are refused."""
         sheets = [
             {"sheet name": "", "header": ["a"], "records": []},
             {"sheet name": "S", "header": ["a"], "records": []},
@@ -35,7 +35,7 @@ class TestDump(unittest.TestCase):
             csv.dump(sheets, io.BytesIO())
 
     def test_named_sheet(self):
-        """CSV has nowhere for a sheet name, so it is refused."""
+        """A sheet name that is not empty is refused."""
         sheets = [{"sheet name": "S", "header": ["a"], "records": []}]
         with self.assertRaises(ValueError):
             csv.dump(sheets, io.BytesIO())
@@ -48,9 +48,7 @@ class TestDump(unittest.TestCase):
 
     def test_quoting(self):
         """RFC 4180, 6 and 7: quote a comma, double a quotation mark."""
-        sheets = [
-            {"sheet name": "", "header": ['a,b', 'c"d'], "records": []}
-        ]
+        sheets = [{"sheet name": "", "header": ["a,b", 'c"d'], "records": []}]
         buffer = io.BytesIO()
         csv.dump(sheets, buffer)
         self.assertEqual(buffer.getvalue(), b'"a,b","c""d"\r\n')

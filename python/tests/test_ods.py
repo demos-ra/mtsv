@@ -1,11 +1,8 @@
 """Test mtsv.integrations.ods against ODF 1.3."""
 
 import io
-import logging
-import tempfile
 import unittest
 import zipfile
-from pathlib import Path
 
 from mtsv.integrations import ods
 
@@ -160,9 +157,7 @@ LEFT_BEHIND = [
     ),
     (
         "table:style-name of a column",
-        package(
-            table("<table:table-column table:style-name='co1'/>" + row())
-        ),
+        package(table("<table:table-column table:style-name='co1'/>" + row())),
         SHEET_A,
     ),
     (
@@ -196,9 +191,7 @@ LEFT_BEHIND = [
     ("text:h", one_cell("<text:h>a</text:h>"), SHEET_A),
     (
         "table:table in a cell",
-        one_cell(
-            "<text:p>a</text:p>" + table(COLUMN + row(cell("", "")), "")
-        ),
+        one_cell("<text:p>a</text:p>" + table(COLUMN + row(cell("", "")), "")),
         SHEET_A,
     ),
     (
@@ -316,21 +309,14 @@ MAPPED = [
     (
         "trailing empty rows",
         package(
-            table(
-                COLUMN
-                + row()
-                + row(cell("", ""), " table:number-rows-repeated='3'")
-            )
+            table(COLUMN + row() + row(cell("", ""), " table:number-rows-repeated='3'"))
         ),
         SHEET_A,
     ),
     (
         "table:number-columns-repeated of a column",
         package(
-            table(
-                "<table:table-column table:number-columns-repeated='3'/>"
-                + row()
-            )
+            table("<table:table-column table:number-columns-repeated='3'/>" + row())
         ),
         SHEET_A,
     ),
@@ -392,9 +378,7 @@ ALWAYS = [
     ("no content.xml", archive()),
     (
         "not office:document-content",
-        archive(
-            f"<office:document-styles{NAMESPACES} office:version='1.3'/>"
-        ),
+        archive(f"<office:document-styles{NAMESPACES} office:version='1.3'/>"),
     ),
     (
         "not office:spreadsheet",
@@ -406,9 +390,7 @@ ALWAYS = [
     ),
     (
         "table:number-rows-repeated 0",
-        package(
-            table(COLUMN + row(attributes=" table:number-rows-repeated='0'"))
-        ),
+        package(table(COLUMN + row(attributes=" table:number-rows-repeated='0'"))),
     ),
     (
         "table:number-columns-repeated 0",
@@ -454,9 +436,7 @@ class TestDump(unittest.TestCase):
             first = archive_file.infolist()[0]
             self.assertEqual(first.filename, "mimetype")
             self.assertEqual(first.compress_type, zipfile.ZIP_STORED)
-            self.assertEqual(
-                archive_file.read("mimetype"), MEDIA_TYPE.encode("ascii")
-            )
+            self.assertEqual(archive_file.read("mimetype"), MEDIA_TYPE.encode("ascii"))
             self.assertEqual(
                 archive_file.namelist(),
                 ["mimetype", "META-INF/manifest.xml", "content.xml"],
@@ -495,35 +475,3 @@ class TestLoad(unittest.TestCase):
         """An unknown errors value raises LookupError."""
         with self.assertRaises(LookupError):
             ods.load(io.BytesIO(package(table())), errors="replace")
-
-
-class TestMain(unittest.TestCase):
-    """The command line: python -m mtsv.integrations.ods."""
-
-    def test_converts_both_ways(self):
-        """.mtsv to .ods and back gives the same bytes."""
-        original = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
-        with tempfile.TemporaryDirectory() as directory:
-            spreadsheet = Path(directory, "multiple-sheets.ods")
-            back = Path(directory, "multiple-sheets.mtsv")
-            ods.main([str(original), str(spreadsheet)])
-            ods.main([str(spreadsheet), str(back)])
-            self.assertEqual(back.read_bytes(), original.read_bytes())
-
-    def test_extras_are_reported_not_refused(self):
-        """Extras are noted, and --errors strict refuses them."""
-        data = package(
-            table(attributes=" table:name='S' table:style-name='ta1'")
-        )
-        expected = bytes([0x0C]) + b"S" + bytes([0x0A]) + b"a" + bytes([0x0A])
-        with tempfile.TemporaryDirectory() as directory:
-            spreadsheet = Path(directory, "styled.ods")
-            result = Path(directory, "styled.mtsv")
-            spreadsheet.write_bytes(data)
-            with self.assertLogs("mtsv.integrations", logging.WARNING) as logs:
-                ods.main([str(spreadsheet), str(result)])
-            self.assertEqual(result.read_bytes(), expected)
-            record, = logs.records
-            self.assertEqual(record.left_behind, ["table:style-name"])
-            with self.assertRaises(SystemExit):
-                ods.main([str(spreadsheet), str(result), "--errors", "strict"])

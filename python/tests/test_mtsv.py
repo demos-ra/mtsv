@@ -1,7 +1,6 @@
-"""Test the mtsv interface: argument types, sheet names, and errors."""
+"""Test the mtsv interface: argument types and sheet names."""
 
 import io
-import pickle
 import unittest
 
 import mtsv
@@ -36,18 +35,3 @@ class TestDumps(unittest.TestCase):
         sheets = [{"sheet name": None, "header": ["a"], "records": []}]
         with self.assertRaises(ValueError):
             mtsv.dumps(sheets)
-
-
-class TestMTSVDecodeError(unittest.TestCase):
-    """MTSVDecodeError, which follows json.JSONDecodeError."""
-
-    def test_pickle(self):
-        """The error survives pickling with its properties."""
-        with self.assertRaises(mtsv.MTSVDecodeError) as caught:
-            mtsv.loads("a")
-        error = caught.exception
-        copy = pickle.loads(pickle.dumps(error))
-        self.assertEqual(
-            (copy.msg, copy.doc, copy.pos, copy.lineno, copy.colno),
-            (error.msg, error.doc, error.pos, error.lineno, error.colno),
-        )

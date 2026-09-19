@@ -35,6 +35,12 @@ version is the `version` field of
 Released on PyPI as [mtsv](https://pypi.org/project/mtsv/). Versions follow
 [Semantic Versioning](https://semver.org).
 
+## Help
+
+Report a problem or ask a question in the
+[issue tracker](https://github.com/demos-ra/mtsv/issues). MTSV is
+maintained by Demos Ra.
+
 ## License
 
 [MIT](LICENSE)

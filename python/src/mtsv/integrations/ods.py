@@ -3,23 +3,20 @@
 Functions:
 dump -- write MTSV sheets to a binary file as an ODF spreadsheet
 load -- read MTSV sheets from a binary ODF spreadsheet file
-main -- deprecated: convert .mtsv to .ods, or .ods to .mtsv
 """
 
-__all__ = ["dump", "load", "main"]
+__all__ = ["dump", "load"]
 
 import re
 import zipfile
-from collections.abc import Iterator
 from itertools import groupby
 from typing import Any, BinaryIO
 from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
-import mtsv.integrations
-from mtsv import _command
-from mtsv.integrations import _xml
+from mtsv.integrations import _errors, _xml
+from mtsv.integrations._sheet import from_lines
 
 _MEDIA_TYPE = "application/vnd.oasis.opendocument.spreadsheet"
 _PACKAGE_FILES = ("mimetype", "META-INF/manifest.xml", "content.xml")
@@ -75,7 +72,8 @@ _PARAGRAPH_CONTENT = (
     "{" + _TEXT + "}span",
 )
 
-# The value attribute of each office:value-type, ODF 1.3, 19.389.
+# ODF 1.3 Part 3, 19.389, Table 14: the value attribute of each
+# office:value-type.
 _VALUE_ATTRIBUTES = {
     "boolean": _BOOLEAN_VALUE,
     "currency": _VALUE,
@@ -99,6 +97,9 @@ _DIGITS = re.compile("[0-9]+")
 def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     """Write MTSV sheets to a binary file as an ODF spreadsheet.
 
+    obj -- the MTSV sheets
+    fp -- a binary file object open for writing
+
     Raise ValueError if the sheets are not MTSV, or if a field or sheet
     name holds a character that XML 1.0 does not allow.
     """
@@ -106,9 +107,7 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     _xml.check_chars(obj, "ODS")
     # ODF 1.3 Part 2, 3.3: "mimetype" is the first file, not compressed.
     with zipfile.ZipFile(fp, "w") as package:
-        package.writestr(
-            zipfile.ZipInfo("mimetype"), _MEDIA_TYPE, zipfile.ZIP_STORED
-        )
+        package.writestr(zipfile.ZipInfo("mimetype"), _MEDIA_TYPE, zipfile.ZIP_STORED)
         package.writestr(
             zipfile.ZipInfo("META-INF/manifest.xml"),
             _manifest(),
@@ -124,42 +123,33 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
 def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     """Read MTSV sheets from a binary ODF spreadsheet file.
 
-    With errors="strict", raise ValueError if anything outside MTSV
-    would be left behind. With errors="ignore", leave it behind. Raise
-    ValueError for a file that is not an ODF spreadsheet.
+    fp -- a binary file object open for reading
+    errors -- "strict" or "ignore"
+
+    Return the sheets. With errors="strict", raise ValueError if
+    anything outside MTSV would be left behind; with errors="ignore",
+    leave it behind. Raise ValueError for a file that is not an ODF
+    spreadsheet, and LookupError for another errors value.
     """
-    mtsv.integrations._errors(errors)
-    extras: set[str] = set()
+    _errors.lookup_error(errors)
     try:
         with zipfile.ZipFile(fp) as package:
-            for name in package.namelist():
-                if name not in _PACKAGE_FILES:
-                    extras.add(name)
+            names = package.namelist()
             root = ElementTree.fromstring(package.read("content.xml"))
     except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as error:
         raise ValueError("the file is not an ODF package") from error
-    sheets = _spreadsheet(root, extras)
-    mtsv.integrations.report(extras, errors)
+    sheets, extras = _spreadsheet(root)
+    extras |= {name for name in names if name not in _PACKAGE_FILES}
+    _errors.report(extras, errors)
     mtsv.dumps(sheets)
     return sheets
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Convert a .mtsv file to .ods, or an .ods file to .mtsv.
-
-    Deprecated; to be removed in 0.5.0. Semantic Versioning, "How
-    should I handle deprecating functionality?"
-    """
-    _command.run(
-        "python -m mtsv.integrations.ods",
-        "Convert a .mtsv file to .ods, or an .ods file to .mtsv.",
-        (".ods",),
-        argv,
-    )
-
-
 def _manifest() -> str:
-    """Generate META-INF/manifest.xml, per ODF 1.3 Part 2, 3.2."""
+    """Generate META-INF/manifest.xml, ODF 1.3 Part 2, 3.2.
+
+    Return its XML.
+    """
     return (
         "<?xml version='1.0' encoding='UTF-8'?>"
         f"<manifest:manifest xmlns:manifest='{_MANIFEST}'"
@@ -173,7 +163,12 @@ def _manifest() -> str:
 
 
 def _document_content(sheets: list[dict[str, Any]]) -> str:
-    """Generate content.xml with one table:table per sheet."""
+    """Generate content.xml with one table:table per sheet.
+
+    sheets -- the MTSV sheets
+
+    Return its XML.
+    """
     tables = "".join(_table(sheet) for sheet in sheets)
     return (
         "<?xml version='1.0' encoding='UTF-8'?>"
@@ -189,30 +184,46 @@ def _document_content(sheets: list[dict[str, Any]]) -> str:
 
 
 def _table(sheet: dict[str, Any]) -> str:
-    """Generate table:table; an empty sheet gets one empty cell."""
+    """Generate table:table; an empty sheet gets one empty cell.
+
+    sheet -- one MTSV sheet
+
+    Return its XML.
+    """
     attribute = " table:name=" + quoteattr(sheet["sheet name"])
     if sheet["header"] is None:
         rows = [[""]]
     else:
         rows = [sheet["header"], *sheet["records"]]
-    column = (
-        "<table:table-column"
-        f" table:number-columns-repeated='{len(rows[0])}'/>"
-    )
+    column = f"<table:table-column table:number-columns-repeated='{len(rows[0])}'/>"
     cells = "".join(_row(fields) for fields in rows)
     return f"<table:table{attribute}>{column}{cells}</table:table>"
 
 
 def _row(fields: list[str]) -> str:
-    """Generate table:table-row."""
+    """Generate table:table-row.
+
+    fields -- the fields of one line
+
+    Return its XML.
+    """
     cells = "".join(_cell(value) for value in fields)
     return f"<table:table-row>{cells}</table:table-row>"
 
 
 def _cell(value: str) -> str:
-    """Generate table:table-cell; an empty field is an empty cell."""
+    """Generate table:table-cell of value type string.
+
+    value -- one field
+
+    Return its XML; an empty field is a cell without a paragraph. ODF
+    1.3 Part 3, 19.389: "The value type of each of these elements shall
+    be specified"; "If the value type is string and the
+    office:string-value attribute is not present, the element content
+    defines the value."
+    """
     if not value:
-        return "<table:table-cell/>"
+        return "<table:table-cell office:value-type='string'/>"
     return (
         "<table:table-cell office:value-type='string'>"
         f"<text:p>{_paragraph(value)}</text:p>"
@@ -221,10 +232,12 @@ def _cell(value: str) -> str:
 
 
 def _paragraph(value: str) -> str:
-    """Generate text:p content, spaces marked per ODF 1.3, 6.1.2-6.1.3.
+    """Generate text:p content, ODF 1.3 Part 3, 6.1.2 and 6.1.3.
 
-    A single space between other characters stays a space; every other
-    space is written with text:s.
+    value -- one field, not empty
+
+    Return its XML: a single space between other characters stays a
+    space; every other space is written with text:s.
     """
     groups = [
         (is_space, "".join(chars))
@@ -246,93 +259,120 @@ def _paragraph(value: str) -> str:
     return "".join(parts)
 
 
-def _count(value: str, minimum: int) -> int:
-    """Read a positiveInteger (minimum 1) or nonNegativeInteger (0)."""
-    digits = value.strip(_XML_SPACE)
-    if not _DIGITS.fullmatch(digits) or int(digits) < minimum:
-        raise ValueError(f"not a valid ODF count: {value!r}")
-    return int(digits)
-
-
 def _spreadsheet(
-    root: ElementTree.Element, extras: set[str]
-) -> list[dict[str, Any]]:
-    """Parse office:document-content into MTSV sheets."""
+    root: ElementTree.Element,
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """Parse office:document-content into MTSV sheets.
+
+    root -- the root element of content.xml
+
+    Return the sheets, and what they leave behind. Raise ValueError for
+    a document that is not a spreadsheet.
+    """
     if root.tag != _DOCUMENT_CONTENT:
         raise ValueError("content.xml is not office:document-content")
-    _xml.note_attributes(root, (_VERSION,), extras, _PREFIXES)
+    left = _xml.attributes_left_behind(root, (_VERSION,), _PREFIXES)
     spreadsheet = None
     for child in root:
         if child.tag == _BODY:
             spreadsheet = child.find(_SPREADSHEET)
         else:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
     if spreadsheet is None:
         raise ValueError("the document is not an office:spreadsheet")
-    _xml.note_attributes(spreadsheet, (), extras, _PREFIXES)
+    left |= _xml.attributes_left_behind(spreadsheet, (), _PREFIXES)
     sheets = []
     for child in spreadsheet:
         if child.tag != _TABLE_TABLE:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
-        sheets.append(_sheet(child, extras))
-    return sheets
+        sheet, sheet_left = _sheet(child)
+        sheets.append(sheet)
+        left |= sheet_left
+    return sheets, left
 
 
-def _sheet(element: ElementTree.Element, extras: set[str]) -> dict[str, Any]:
-    """Parse table:table into a sheet, reading only its used area."""
-    _xml.note_attributes(element, (_NAME,), extras, _PREFIXES)
+def _sheet(element: ElementTree.Element) -> tuple[dict[str, Any], set[str]]:
+    """Parse table:table into a sheet, reading only its used area.
+
+    element -- one table:table
+
+    Return the sheet, and what it leaves behind. Raise ValueError for
+    a count that is not valid.
+    """
+    left = _xml.attributes_left_behind(element, (_NAME,), _PREFIXES)
     name = element.get(_NAME, "")
+    rows, rows_left = _rows(element)
+    left |= rows_left
     lines: list[list[str]] = []
     pending = 0
-    for count, values in _rows(element, extras):
+    for count, values in rows:
         if values:
             lines.extend([] for _ in range(pending))
             pending = 0
             lines.extend(list(values) for _ in range(count))
         else:
             pending += count
-    return mtsv.integrations._sheet(name, lines)
+    return from_lines(name, lines), left
 
 
 def _rows(
-    element: ElementTree.Element, extras: set[str]
-) -> Iterator[tuple[int, list[str]]]:
-    """Yield (repeat count, values) per row, reading into wrappers."""
+    element: ElementTree.Element,
+) -> tuple[list[tuple[int, list[str]]], set[str]]:
+    """Read the rows of a table, reading into wrappers.
+
+    element -- a table:table or a wrapper of rows
+
+    Return (repeat count, values) per row, and what the rows leave
+    behind. Raise ValueError for a count that is not valid.
+    """
+    rows = []
+    left: set[str] = set()
     for child in element:
         if child.tag == _ROW:
-            _xml.note_attributes(
-                child, (_ROWS_REPEATED,), extras, _PREFIXES
-            )
+            left |= _xml.attributes_left_behind(child, (_ROWS_REPEATED,), _PREFIXES)
             count = _count(child.get(_ROWS_REPEATED, "1"), 1)
-            yield count, _cells(child, extras)
+            values, cells_left = _cells(child)
+            rows.append((count, values))
+            left |= cells_left
         elif child.tag == _COLUMN:
-            _xml.note_attributes(
-                child, (_COLUMNS_REPEATED,), extras, _PREFIXES
-            )
+            left |= _xml.attributes_left_behind(child, (_COLUMNS_REPEATED,), _PREFIXES)
             _count(child.get(_COLUMNS_REPEATED, "1"), 1)
         elif child.tag in (_ROWS, _COLUMNS):
-            yield from _rows(child, extras)
+            inner, inner_left = _rows(child)
+            rows.extend(inner)
+            left |= inner_left
         elif child.tag in _WRAPPERS:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
-            _xml.note_attributes(child, (), extras, _PREFIXES)
-            yield from _rows(child, extras)
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
+            left |= _xml.attributes_left_behind(child, (), _PREFIXES)
+            inner, inner_left = _rows(child)
+            rows.extend(inner)
+            left |= inner_left
         else:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
+    return rows, left
 
 
-def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
-    """Read a row's cell values, without its trailing empty cells."""
+def _cells(row: ElementTree.Element) -> tuple[list[str], set[str]]:
+    """Read a row's cell values, without its trailing empty cells.
+
+    row -- one table:table-row
+
+    Return the values, and what the cells leave behind. Raise
+    ValueError for a count that is not valid.
+    """
     values: list[str] = []
+    left: set[str] = set()
     pending = 0
     for child in row:
         if child.tag == _CELL:
-            text = _cell_value(child, extras)
+            text, cell_left = _cell_value(child)
+            left |= cell_left
         elif child.tag == _COVERED_CELL:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
             text = ""
         else:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
             continue
         count = _count(child.get(_COLUMNS_REPEATED, "1"), 1)
         if text:
@@ -341,17 +381,23 @@ def _cells(row: ElementTree.Element, extras: set[str]) -> list[str]:
             values.extend([text] * count)
         else:
             pending += count
-    return values
+    return values, left
 
 
-def _cell_value(cell: ElementTree.Element, extras: set[str]) -> str:
-    """Read a cell's value, from its value attribute, ODF 1.3, 19.389.
+def _cell_value(cell: ElementTree.Element) -> tuple[str, set[str]]:
+    """Read a cell's value, from its value attribute.
 
-    A value type other than string is left behind.
+    cell -- one table:table-cell
+
+    Return the value, and what the cell leaves behind; a value type
+    other than string is left behind. ODF 1.3 Part 3, 19.389: the value
+    attribute holds the value "if the value type is not string or if
+    the <table:table-cell> element content differs from the value".
     """
     value_type = cell.get(_VALUE_TYPE)
     holder = _VALUE_ATTRIBUTES.get(value_type)
     value = None if holder is None else cell.get(holder)
+    left = set()
     for key in cell.attrib:
         if key == _COLUMNS_REPEATED:
             continue
@@ -359,35 +405,50 @@ def _cell_value(cell: ElementTree.Element, extras: set[str]) -> str:
             continue
         if key == holder and value is not None:
             continue
-        extras.add(_xml.prefixed(key, _PREFIXES))
-    text = _cell_text(cell, extras)
+        left.add(_xml.prefixed(key, _PREFIXES))
+    text, text_left = _cell_text(cell)
+    left |= text_left
     if value is None:
-        return text
+        return text, left
     if value_type != "string":
-        extras.add(f"office:value-type {value_type}")
+        left.add(f"office:value-type {value_type}")
     elif text and text != value:
-        extras.add(_xml.prefixed(_P, _PREFIXES))
-    return value
+        left.add(_xml.prefixed(_P, _PREFIXES))
+    return value, left
 
 
-def _cell_text(cell: ElementTree.Element, extras: set[str]) -> str:
-    """Read a cell's paragraphs, joined by line breaks."""
+def _cell_text(cell: ElementTree.Element) -> tuple[str, set[str]]:
+    """Read a cell's paragraphs, joined by line breaks.
+
+    cell -- one table:table-cell
+
+    Return the text, and what the paragraphs leave behind.
+    """
     paragraphs = []
+    left: set[str] = set()
     for child in cell:
         if child.tag in (_P, _H):
             if child.tag == _H:
-                extras.add(_xml.prefixed(child.tag, _PREFIXES))
-            _xml.note_attributes(child, (), extras, _PREFIXES)
-            paragraphs.append(_paragraph_text(child, extras))
+                left.add(_xml.prefixed(child.tag, _PREFIXES))
+            left |= _xml.attributes_left_behind(child, (), _PREFIXES)
+            text, paragraph_left = _paragraph_text(child)
+            paragraphs.append(text)
+            left |= paragraph_left
         else:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
-    return _LF.join(paragraphs)
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
+    return _LF.join(paragraphs), left
 
 
-def _paragraph_text(paragraph: ElementTree.Element, extras: set[str]) -> str:
-    """Read a paragraph by the white space rules of ODF 1.3, 6.1.2."""
-    tokens: list[tuple[bool, str]] = []
-    _collect(paragraph, tokens, extras)
+def _paragraph_text(
+    paragraph: ElementTree.Element,
+) -> tuple[str, set[str]]:
+    """Read a paragraph, ODF 1.3 Part 3, 6.1.2 White Space Characters.
+
+    paragraph -- one text:p or text:h
+
+    Return its text, and what it leaves behind.
+    """
+    tokens, left = _collect(paragraph)
     merged: list[tuple[bool, str]] = []
     for kept, text in tokens:
         if not kept and merged and not merged[-1][0]:
@@ -398,17 +459,22 @@ def _paragraph_text(paragraph: ElementTree.Element, extras: set[str]) -> str:
         merged[0] = (False, merged[0][1].lstrip(_SPACE))
     if merged and not merged[-1][0]:
         merged[-1] = (False, merged[-1][1].rstrip(_SPACE))
-    return "".join(
-        text if kept else _SPACES.sub(_SPACE, text) for kept, text in merged
-    )
+    text = "".join(text if kept else _SPACES.sub(_SPACE, text) for kept, text in merged)
+    return text, left
 
 
 def _collect(
     element: ElementTree.Element,
-    tokens: list[tuple[bool, str]],
-    extras: set[str],
-) -> None:
-    """Flatten paragraph content per steps 1 to 4 of ODF 1.3, 6.1.2."""
+) -> tuple[list[tuple[bool, str]], set[str]]:
+    """Flatten paragraph content, steps 1 to 4 of ODF 1.3 Part 3, 6.1.2.
+
+    element -- a paragraph, or an element inside one
+
+    Return (kept, text) tokens, kept for the characters of text:s,
+    text:tab and text:line-break, and what the content leaves behind.
+    """
+    tokens: list[tuple[bool, str]] = []
+    left: set[str] = set()
     if element.text:
         tokens.append((False, _to_spaces(element.text)))
     for child in element:
@@ -419,25 +485,45 @@ def _collect(
         elif child.tag == _LINE_BREAK:
             tokens.append((True, _LF))
         elif child.tag == _RUBY:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
             base = child.find(_RUBY_BASE)
             if base is not None:
-                _collect(base, tokens, extras)
+                inner, inner_left = _collect(base)
+                tokens.extend(inner)
+                left |= inner_left
         elif child.tag in _PARAGRAPH_CONTENT:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
-            _collect(child, tokens, extras)
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
+            inner, inner_left = _collect(child)
+            tokens.extend(inner)
+            left |= inner_left
         else:
-            extras.add(_xml.prefixed(child.tag, _PREFIXES))
+            left.add(_xml.prefixed(child.tag, _PREFIXES))
         if child.tail:
             tokens.append((False, _to_spaces(child.tail)))
+    return tokens, left
 
 
 def _to_spaces(text: str) -> str:
-    """Replace HT, CR, and LF with a space, step 4 of ODF 1.3, 6.1.2."""
+    """Replace HT, CR and LF with a space, ODF 1.3 Part 3, 6.1.2 step 4.
+
+    text -- character data of a paragraph
+
+    Return the text.
+    """
     text = text.replace(_HTAB, _SPACE)
     text = text.replace(_CR, _SPACE)
     return text.replace(_LF, _SPACE)
 
 
-if __name__ == "__main__":
-    main()
+def _count(value: str, minimum: int) -> int:
+    """Read a positiveInteger (minimum 1) or nonNegativeInteger (0).
+
+    value -- the attribute value
+    minimum -- 1 or 0
+
+    Return the count. Raise ValueError for anything else.
+    """
+    digits = value.strip(_XML_SPACE)
+    if not _DIGITS.fullmatch(digits) or int(digits) < minimum:
+        raise ValueError(f"not a valid ODF count: {value!r}")
+    return int(digits)

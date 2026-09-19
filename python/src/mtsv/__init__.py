@@ -24,6 +24,9 @@ from mtsv._parser import MTSVDecodeError
 def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     """Write MTSV sheets to a binary file object, encoded as UTF-8.
 
+    obj -- the MTSV sheets
+    fp -- a binary file object open for writing
+
     Raise ValueError for sheets that MTSV cannot represent.
     """
     fp.write(dumps(obj).encode("utf-8"))
@@ -31,6 +34,8 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
 
 def dumps(obj: list[dict[str, Any]]) -> str:
     """Return MTSV sheets as an MTSV string.
+
+    obj -- the MTSV sheets
 
     Raise ValueError for sheets that MTSV cannot represent.
     """
@@ -40,16 +45,18 @@ def dumps(obj: list[dict[str, Any]]) -> str:
 def load(fp: BinaryIO, /) -> list[dict[str, Any]]:
     """Read MTSV sheets from a binary file object, decoded as UTF-8.
 
-    Raise TypeError for a file opened in text mode, and ValueError for
-    bytes that are not UTF-8 or text that is not an MTSV file.
+    fp -- a binary file object open for reading, by position only
+
+    Return the sheets. Raise TypeError for a file opened in text mode,
+    and ValueError for bytes that are not UTF-8 or text that is not an
+    MTSV file.
     """
     b = fp.read()
     try:
         s = b.decode("utf-8")
     except AttributeError:
         raise TypeError(
-            "File must be opened in binary mode,"
-            " e.g. use `open('foo.mtsv', 'rb')`"
+            "File must be opened in binary mode, e.g. use `open('foo.mtsv', 'rb')`"
         ) from None
     return loads(s)
 
@@ -57,8 +64,10 @@ def load(fp: BinaryIO, /) -> list[dict[str, Any]]:
 def loads(s: str, /) -> list[dict[str, Any]]:
     """Read MTSV sheets from an MTSV string.
 
-    Raise TypeError for anything but a string, and MTSVDecodeError for
-    text that is not an MTSV file.
+    s -- the MTSV text, by position only
+
+    Return the sheets. Raise TypeError for anything but a string, and
+    MTSVDecodeError for text that is not an MTSV file.
     """
     if not isinstance(s, str):
         raise TypeError(f"Expected str object, not '{type(s).__qualname__}'")

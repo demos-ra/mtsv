@@ -14,7 +14,14 @@ class TestChar(unittest.TestCase):
     def test_edges_inside(self):
         """Each edge of each range is a Char."""
         for code in (
-            0x09, 0x0A, 0x0D, 0x20, 0xD7FF, 0xE000, 0xFFFD, 0x10000,
+            0x09,
+            0x0A,
+            0x0D,
+            0x20,
+            0xD7FF,
+            0xE000,
+            0xFFFD,
+            0x10000,
             0x10FFFF,
         ):
             with self.subTest(hex(code)):
@@ -74,14 +81,11 @@ class TestPrefixed(unittest.TestCase):
         self.assertEqual(_xml.prefixed("a", {NAMESPACE: "p"}), "a")
 
 
-class TestNoteAttributes(unittest.TestCase):
-    """note_attributes: attributes outside the mapping are recorded."""
+class TestAttributesLeftBehind(unittest.TestCase):
+    """attributes_left_behind: attributes outside the mapping."""
 
-    def test_records_others(self):
-        """Only the attributes not allowed are recorded."""
-        element = ElementTree.fromstring(
-            f"<e xmlns:p='{NAMESPACE}' a='1' p:b='2'/>"
-        )
-        extras: set[str] = set()
-        _xml.note_attributes(element, ("a",), extras, {NAMESPACE: "p"})
-        self.assertEqual(extras, {"p:b"})
+    def test_returns_others(self):
+        """Only the attributes not allowed are returned."""
+        element = ElementTree.fromstring(f"<e xmlns:p='{NAMESPACE}' a='1' p:b='2'/>")
+        left = _xml.attributes_left_behind(element, ("a",), {NAMESPACE: "p"})
+        self.assertEqual(left, {"p:b"})
