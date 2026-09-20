@@ -1,4 +1,4 @@
-"""Test mtsv.integrations.xlsx against ISO/IEC 29500."""
+"""Test mtsv.integrations.xlsx against ECMA-376."""
 
 import io
 import unittest

@@ -167,7 +167,8 @@ def _check(source: str, target: str, parser: _Parser) -> None:
     target -- the output's file extension
     parser -- the parser that reports a usage error
 
-    Exit with a usage error for an extension with no format.
+    Exit with a usage error for an extension with no format, or for one
+    whose format needs a package that is not installed.
     """
     for suffix in (source, target):
         if suffix != mtsv.integrations.MTSV:
@@ -175,6 +176,8 @@ def _check(source: str, target: str, parser: _Parser) -> None:
                 mtsv.integrations.lookup(suffix)
             except LookupError as error:
                 parser.error(str(error))
+            except ModuleNotFoundError as error:
+                parser.error(f"the {suffix} format needs the {error.name} package")
 
 
 def _convert(path: Path, output: Path, source: str, target: str, errors: str) -> None:

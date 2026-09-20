@@ -1,4 +1,4 @@
-"""Test mtsv.integrations.arrow: the door out and the door in."""
+"""Test mtsv.integrations.arrow against the Arrow Columnar Format."""
 
 import datetime
 import logging

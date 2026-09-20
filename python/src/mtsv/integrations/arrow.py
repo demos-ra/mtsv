@@ -1,4 +1,4 @@
-"""Convert between MTSV sheets and Apache Arrow tables.
+"""Convert between MTSV sheets and Arrow tables, Arrow Columnar Format.
 
 Functions:
 to_arrow -- create (sheet name, table) pairs from MTSV sheets
@@ -177,7 +177,8 @@ def _cast(column: pa.ChunkedArray) -> pa.ChunkedArray:
 
     column -- the column
 
-    Return the column as Utf8.
+    Return the column as Utf8. pyarrow, compute.cast: "Cast array
+    values to another data type."
     """
     try:
         return pc.cast(column, pa.string())

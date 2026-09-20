@@ -13,7 +13,7 @@ implementations.
 | Folder         | Contents                                                |
 |----------------|---------------------------------------------------------|
 | `conformance/` | Test files shared by every implementation               |
-| `python/`      | Python implementation, with the `mtsv` command and CSV, JSON, ODS, XLSX and Apache Arrow integrations |
+| `python/`      | Python implementation, with the `mtsv` command and CSV, JSON, ODS, XLSX, SQLite, Apache Arrow, Parquet and Arrow IPC integrations |
 
 Each language folder holds one implementation of the specification: a parser
 and a generator. Integrations connect an implementation to other standards,

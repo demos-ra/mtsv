@@ -13,11 +13,17 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
+
 from mtsv._command import run
 
 from support import CONFORMANCE
 
 ORIGINAL = CONFORMANCE / "conforming" / "multiple-sheets.mtsv"
+ONE_SHEET = CONFORMANCE / "conforming" / "first-sheet-ff.mtsv"
 
 
 class Stream:
@@ -32,8 +38,8 @@ class TestRun(unittest.TestCase):
     """The command line: mtsv."""
 
     def test_converts_each_format(self):
-        """Each file format converts from MTSV and back to it."""
-        for suffix in (".ods", ".xlsx"):
+        """Each format holding many sheets converts from MTSV and back."""
+        for suffix in (".ods", ".sqlite", ".xlsx"):
             with self.subTest(suffix):
                 with tempfile.TemporaryDirectory() as directory:
                     book = Path(directory, "book" + suffix)
@@ -52,6 +58,18 @@ class TestRun(unittest.TestCase):
             run([str(spreadsheet), str(workbook)])
             run([str(workbook), str(back)])
             self.assertEqual(back.read_bytes(), ORIGINAL.read_bytes())
+
+    @unittest.skipUnless(pa, "requires pyarrow")
+    def test_converts_each_one_table_format(self):
+        """Each format holding one table converts from MTSV and back."""
+        for suffix in (".arrow", ".parquet"):
+            with self.subTest(suffix):
+                with tempfile.TemporaryDirectory() as directory:
+                    book = Path(directory, "book" + suffix)
+                    back = Path(directory, "back.mtsv")
+                    run([str(ONE_SHEET), str(book)])
+                    run([str(book), str(back)])
+                    self.assertEqual(back.read_bytes(), ONE_SHEET.read_bytes())
 
     def test_extension_without_a_format_stops(self):
         """An extension that names no format stops the conversion."""
@@ -104,7 +122,7 @@ class TestRun(unittest.TestCase):
             self.assertEqual(back.read_bytes(), ORIGINAL.read_bytes())
 
     def test_output_given_twice_stops(self):
-        """An output file given both ways is refused, not guessed."""
+        """An output file given both ways is refused."""
         with tempfile.TemporaryDirectory() as directory:
             book = Path(directory, "book.ods")
             with contextlib.redirect_stderr(io.StringIO()):

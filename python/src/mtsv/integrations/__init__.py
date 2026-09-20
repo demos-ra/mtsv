@@ -2,9 +2,12 @@
 
 Modules:
 arrow -- convert between MTSV sheets and Apache Arrow tables
+arrow_ipc -- convert between MTSV sheets and Arrow IPC files
 csv -- convert between MTSV sheets and CSV
 json -- convert between MTSV sheets and JSON
 ods -- convert between MTSV sheets and OpenDocument spreadsheets
+parquet -- convert between MTSV sheets and Apache Parquet files
+sqlite -- convert between MTSV sheets and SQLite databases
 xlsx -- convert between MTSV sheets and OOXML workbooks
 
 Functions:
@@ -14,27 +17,36 @@ lookup -- return the integration module of a file extension
 report -- refuse or note what an integration would leave behind
 
 Constants:
-FORMATS -- deprecated, to be removed in 0.6.0: use lookup
 MTSV -- the file extension of MTSV itself
 """
 
-__all__ = ["FORMATS", "MTSV", "dump", "load", "lookup", "report"]
+__all__ = ["MTSV", "dump", "load", "lookup", "report"]
 
+import importlib
 from types import ModuleType
 from typing import Any, BinaryIO
 
 import mtsv
-from mtsv.integrations import csv, json, ods, xlsx
 from mtsv.integrations._errors import report
 
 # The draft, Media Type Registration: the file extension of MTSV.
 MTSV = ".mtsv"
 
 # The extension each media type registration declares: "CSV" in RFC
-# 7111, Section 5.1, ".json" in RFC 8259, Section 11, "ods" in the IANA
-# registration of the OpenDocument spreadsheet type, and "xlsx" in the
-# IANA registration of the OOXML spreadsheet type.
-FORMATS = {".csv": csv, ".json": json, ".ods": ods, ".xlsx": xlsx}
+# 7111, Section 5.1, ".json" in RFC 8259, Section 11, and "ods",
+# "xlsx", ".sqlite" and ".parquet" in the IANA registrations of the
+# OpenDocument spreadsheet, OOXML spreadsheet, SQLite and Apache
+# Parquet types. The Arrow Columnar Format, IPC File Format recommends
+# ".arrow".
+_MODULES = {
+    ".arrow": "arrow_ipc",
+    ".csv": "csv",
+    ".json": "json",
+    ".ods": "ods",
+    ".parquet": "parquet",
+    ".sqlite": "sqlite",
+    ".xlsx": "xlsx",
+}
 
 
 def load(suffix: str, fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
@@ -71,10 +83,11 @@ def lookup(suffix: str) -> ModuleType:
 
     suffix -- the file extension, such as ".csv"
 
-    Raise LookupError for an extension that names no format. Python
-    codecs, codecs.lookup: "If no CodecInfo object is found, a
+    Raise LookupError for an extension that names no format, and
+    ImportError where the format needs a package that is not installed.
+    Python codecs, codecs.lookup: "If no CodecInfo object is found, a
     LookupError is raised."
     """
-    if suffix not in FORMATS:
+    if suffix not in _MODULES:
         raise LookupError(f"no format for {suffix!r}")
-    return FORMATS[suffix]
+    return importlib.import_module(f"{__name__}.{_MODULES[suffix]}")
