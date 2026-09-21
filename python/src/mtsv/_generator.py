@@ -12,6 +12,18 @@ eol -- generate a line break
 check_sheet -- refuse a sheet whose lines do not fit the data model
 """
 
+__all__ = [
+    "mtsv_file",
+    "named_sheet",
+    "sheet_body",
+    "header",
+    "record",
+    "field",
+    "sheet_name",
+    "eol",
+    "check_sheet",
+]
+
 from typing import Any
 
 from mtsv._grammar import FF, HTAB, LF, field_char

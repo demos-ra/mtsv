@@ -281,7 +281,7 @@ src/mtsv/
   command
     _command       how a person runs a conversion
     __main__       the mtsv entry point
-tests/             one test file per module above
+tests/             one file per module above, the corpus, and support
 ```
 
 ## Test

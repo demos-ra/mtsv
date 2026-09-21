@@ -7,6 +7,8 @@ attributes_left_behind -- return the attributes outside the MTSV mapping
 prefixed -- return {namespace}local as prefix:local for known prefixes
 """
 
+__all__ = ["check_chars", "char", "attributes_left_behind", "prefixed"]
+
 from typing import Any
 from xml.etree import ElementTree
 

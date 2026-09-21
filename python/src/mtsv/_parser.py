@@ -20,6 +20,22 @@ Constants:
 SIGNATURE -- U+FEFF, the encoding signature
 """
 
+__all__ = [
+    "MTSVDecodeError",
+    "mtsv_file",
+    "signature",
+    "first_sheet",
+    "named_sheet",
+    "sheet_body",
+    "header",
+    "record",
+    "field",
+    "sheet_name",
+    "eol",
+    "check_width",
+    "SIGNATURE",
+]
+
 from typing import Any
 
 from mtsv._grammar import CRLF, FF, HTAB, LF, field_char

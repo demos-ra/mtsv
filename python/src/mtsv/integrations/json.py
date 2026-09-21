@@ -20,8 +20,9 @@ from mtsv.integrations import _errors
 _WRITE = "utf-8"
 _READ = "utf-8-sig"
 
-# conformance/README.md: each result is written with no white space
-# except one final line feed.
+# CPython json, json.dumps: "To get the most compact JSON
+# representation, you should specify (',', ':') to eliminate
+# whitespace."
 _SEPARATORS = (",", ":")
 
 # The members of a sheet, the draft, Data Model.

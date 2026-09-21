@@ -11,6 +11,8 @@ Functions:
 field_char -- return whether a character is a field-char
 """
 
+__all__ = ["HTAB", "LF", "FF", "CR", "CRLF", "field_char"]
+
 HTAB = chr(0x09)
 LF = chr(0x0A)
 FF = chr(0x0C)
