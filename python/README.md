@@ -258,6 +258,11 @@ Text that MTSV cannot hold, such as a tab or line break inside a value,
 always raises `ValueError`. So does a value with no text form at all: a
 SQLite BLOB, or an Arrow column of binary, a list, or a struct.
 
+Every refusal of sheets says where, so the value can be found and
+fixed: the sheet, then its sheet name, header or record, then the
+field, each counted from 1, as in `sheet 2, record 14, field 3`.
+Records are counted after the header.
+
 ## Layout
 
 Each module hides one decision, named beside it. "core" and "command"
@@ -267,6 +272,7 @@ are groups of files in `src/mtsv/`, not folders.
 src/mtsv/
   core
     _grammar       which characters MTSV uses
+    _data_model    how a position in the sheets is named
     _parser        how text becomes sheets
     _generator     how sheets become text
     __init__       the public shape: dump, dumps, load, loads

@@ -47,8 +47,9 @@ class TestDump(unittest.TestCase):
     def test_named_sheet(self):
         """A sheet name that is not empty is refused."""
         sheets = [{"sheet name": "S", "header": ["a"], "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             arrow_ipc.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, sheet name"))
 
     def test_cannot_be_represented(self):
         """Each file that MTSV cannot hold is refused by dump."""

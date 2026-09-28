@@ -100,8 +100,9 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, or if a field or sheet
-    name holds a character that XML 1.0 does not allow.
+    Raise ValueError, naming the position, if the sheets are not MTSV,
+    or if a field or sheet name holds a character that XML 1.0 does not
+    allow.
     """
     mtsv.dumps(obj)
     _xml.check_chars(obj, "ODS")

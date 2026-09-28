@@ -12,6 +12,7 @@ import io
 from typing import Any, BinaryIO
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors
 
 # RFC 7111, Section 5.1, which updates RFC 4180: "the charset
@@ -30,9 +31,9 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, if the file holds no
-    sheet or more than one, if its sheet name is not empty, or if its
-    sheet has no lines.
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if the sheets are not MTSV, if its sheet name
+    is not empty, or if its sheet has no lines.
     """
     mtsv.dumps(obj)
     _check(obj)
@@ -50,8 +51,9 @@ def load(fp: BinaryIO, /, errors: str = "strict") -> list[dict[str, Any]]:
     errors -- "strict" or "ignore"; CSV leaves nothing behind
 
     Return one sheet whose sheet name is empty, the first line its
-    header. Raise ValueError for a file that is not UTF-8, or whose
-    lines MTSV cannot hold, and LookupError for another errors value.
+    header. Raise ValueError for a file that is not UTF-8, or, naming
+    the position, whose lines MTSV cannot hold; and LookupError for
+    another errors value.
     """
     _errors.lookup_error(errors)
     try:
@@ -73,11 +75,11 @@ def _check(obj: list[dict[str, Any]]) -> None:
 
     obj -- the MTSV sheets
 
-    Raise ValueError if the file holds no sheet or more than one, if
-    its sheet name is not empty, or if its sheet has no lines. RFC
-    4180, Section 2: a file holds at least one record; the draft,
-    Relationship to TSV: a TSV file is one sheet whose sheet name is
-    empty.
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if its sheet name is not empty, or if its
+    sheet has no lines. RFC 4180, Section 2: a file holds at least one
+    record; the draft, Relationship to TSV: a TSV file is one sheet
+    whose sheet name is empty.
     """
     if not obj:
         raise ValueError(
@@ -92,10 +94,11 @@ def _check(obj: list[dict[str, Any]]) -> None:
     if obj[0]["sheet name"] != "":
         raise ValueError(
             "CSV has nowhere to hold a sheet name, so a sheet whose sheet"
-            " name is not empty cannot be represented in CSV"
+            " name is not empty cannot be represented in CSV:"
+            f" {_data_model.sheet_name(0)}"
         )
     if obj[0]["header"] is None:
         raise ValueError(
             "a CSV file holds at least one record, so a sheet with no"
-            " lines cannot be represented in CSV"
+            f" lines cannot be represented in CSV: {_data_model.sheet(0)}"
         )

@@ -14,6 +14,7 @@ from xml.etree import ElementTree
 from xml.sax.saxutils import escape, quoteattr
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors, _xml
 from mtsv.integrations._sheet import from_lines
 
@@ -93,10 +94,10 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, if the file has no
-    sheets, if two sheets have one sheet name, if a sheet is wider or
-    longer than the grid, or if a field or sheet name holds a character
-    that XML 1.0 does not allow.
+    Raise ValueError if the file has no sheets, and, naming the
+    position, if the sheets are not MTSV, if two sheets have one sheet
+    name, if a sheet is wider or longer than the grid, or if a field or
+    sheet name holds a character that XML 1.0 does not allow.
     """
     mtsv.dumps(obj)
     _check(obj)
@@ -138,35 +139,38 @@ def _check(obj: list[dict[str, Any]]) -> None:
 
     obj -- the MTSV sheets
 
-    Raise ValueError if there are no sheets, if two sheets have one
-    sheet name, if a sheet is wider or longer than the grid, or if a
-    field or sheet name holds a character that XML 1.0 does not allow.
-    ECMA-376 Part 4, sml.xsd, CT_Sheets: at least one sheet; Part 1,
-    18.2.19: a sheet's name "shall be unique"; Part 1, 18.17.5.1: the
-    grid.
+    Raise ValueError if there are no sheets, and, naming the position,
+    if two sheets have one sheet name, if a sheet is wider or longer
+    than the grid, or if a field or sheet name holds a character that
+    XML 1.0 does not allow. ECMA-376 Part 4, sml.xsd, CT_Sheets: at
+    least one sheet; Part 1, 18.2.19: a sheet's name "shall be unique";
+    Part 1, 18.17.5.1: the grid.
     """
     if not obj:
         raise ValueError(
             "a workbook holds at least one sheet, so an MTSV file of no"
             " sheets cannot be represented in XLSX"
         )
-    names = [sheet["sheet name"] for sheet in obj]
-    if len(set(names)) != len(names):
-        raise ValueError(
-            "each sheet name in a workbook is unique, so sheets that share"
-            " a sheet name cannot be represented in XLSX"
-        )
-    for sheet in obj:
+    names = set()
+    for index, sheet in enumerate(obj):
+        if sheet["sheet name"] in names:
+            raise ValueError(
+                "each sheet name in a workbook is unique, so sheets that"
+                " share a sheet name cannot be represented in XLSX:"
+                f" {_data_model.sheet_name(index)}"
+            )
+        names.add(sheet["sheet name"])
         lines = _lines(sheet)
+        position = _data_model.sheet(index)
         if len(lines) > _ROWS:
             raise ValueError(
                 f"a worksheet holds at most {_ROWS} rows, so a longer"
-                " sheet cannot be represented in XLSX"
+                f" sheet cannot be represented in XLSX: {position}"
             )
         if lines and len(lines[0]) > _COLUMNS:
             raise ValueError(
                 f"a worksheet holds at most {_COLUMNS} columns, so a"
-                " wider sheet cannot be represented in XLSX"
+                f" wider sheet cannot be represented in XLSX: {position}"
             )
     _xml.check_chars(obj, "XLSX")
 

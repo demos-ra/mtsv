@@ -12,6 +12,8 @@ __all__ = ["check_chars", "char", "attributes_left_behind", "prefixed"]
 from typing import Any
 from xml.etree import ElementTree
 
+from mtsv import _data_model
+
 
 def check_chars(sheets: list[dict[str, Any]], format_name: str) -> None:
     """Refuse a sheet name or field holding a character not a Char.
@@ -19,18 +21,27 @@ def check_chars(sheets: list[dict[str, Any]], format_name: str) -> None:
     sheets -- the MTSV sheets
     format_name -- the format named in the error
 
-    Raise ValueError for the first such character.
+    Raise ValueError, naming the position, for the first such
+    character.
     """
-    for sheet in sheets:
-        values = [sheet["sheet name"]]
-        for fields in [sheet["header"] or [], *sheet["records"]]:
-            values.extend(fields)
-        for value in values:
+    for index, sheet in enumerate(sheets):
+        values = [(_data_model.sheet_name(index), sheet["sheet name"])]
+        lines = [(_data_model.header(index), sheet["header"] or [])]
+        lines.extend(
+            (_data_model.record(index, record_index), fields)
+            for record_index, fields in enumerate(sheet["records"])
+        )
+        for line, fields in lines:
+            values.extend(
+                (_data_model.field(line, field_index), value)
+                for field_index, value in enumerate(fields)
+            )
+        for position, value in values:
             if not all(char(c) for c in value):
                 raise ValueError(
                     "a field or sheet name that contains a character not"
                     " allowed in XML 1.0 cannot be represented in"
-                    f" {format_name}"
+                    f" {format_name}: {position}"
                 )
 
 

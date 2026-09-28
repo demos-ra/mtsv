@@ -57,14 +57,16 @@ class TestDump(unittest.TestCase):
     def test_sheet_with_no_lines(self):
         """CREATE TABLE, 3: a table holds one or more columns."""
         sheets = [{"sheet name": "T", "header": None, "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             sqlite.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1"))
 
     def test_reserved_sheet_name(self):
         """CREATE TABLE, 2: a name beginning "sqlite_" is an error."""
         sheets = [{"sheet name": "sqlite_x", "header": ["a"], "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             sqlite.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, sheet name"))
 
     def test_duplicate_sheet_names(self):
         """CREATE TABLE, 2: a name already in the database is an error."""
@@ -72,24 +74,33 @@ class TestDump(unittest.TestCase):
             {"sheet name": "T", "header": ["a"], "records": []},
             {"sheet name": "T", "header": ["a"], "records": []},
         ]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             sqlite.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 2, sheet name"))
 
     def test_duplicate_column_names(self):
         """A header that repeats a field name is refused, as observed."""
         sheets = [{"sheet name": "T", "header": ["a", "a"], "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             sqlite.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, header, field 2"))
 
     def test_null_character_in_a_name(self):
         """A name holding U+0000 is refused, as observed."""
-        for sheets in (
-            [{"sheet name": NUL, "header": ["a"], "records": []}],
-            [{"sheet name": "T", "header": [NUL], "records": []}],
+        for sheets, position in (
+            (
+                [{"sheet name": NUL, "header": ["a"], "records": []}],
+                "sheet 1, sheet name",
+            ),
+            (
+                [{"sheet name": "T", "header": ["a", NUL], "records": []}],
+                "sheet 1, header, field 2",
+            ),
         ):
             with self.subTest(sheets):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError) as caught:
                     sqlite.dump(sheets, io.BytesIO())
+                self.assertTrue(str(caught.exception).endswith(": " + position))
 
     def test_null_character_in_a_value(self):
         """A record value holding U+0000 is carried, as observed."""
@@ -174,9 +185,14 @@ class TestLoad(unittest.TestCase):
 
     def test_blob_refused(self):
         """Datatypes In SQLite, 2: a BLOB has no text form."""
-        data = database("CREATE TABLE t(a)", "INSERT INTO t VALUES (x'00ff')")
-        with self.assertRaises(ValueError):
+        data = database(
+            "CREATE TABLE t(a TEXT, b)",
+            "INSERT INTO t VALUES ('x', 'y')",
+            "INSERT INTO t VALUES ('x', x'00ff')",
+        )
+        with self.assertRaises(ValueError) as caught:
             sqlite.load(io.BytesIO(data), errors="ignore")
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, record 2, field 2"))
 
     def test_view_left_behind(self):
         """Database File Format, 2.6: a view is not a table."""

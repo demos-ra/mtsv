@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors
 
 # Arrow Columnar Format 1.5, Data Types: Null to Duration, whose
@@ -41,8 +42,8 @@ def to_arrow(obj: list[dict[str, Any]], /) -> list[tuple[str, pa.Table]]:
 
     obj -- the MTSV sheets, by position only
 
-    Return one pair per sheet, in order. Raise ValueError if the
-    sheets are not MTSV.
+    Return one pair per sheet, in order. Raise ValueError, naming the
+    position, if the sheets are not MTSV.
     """
     mtsv.dumps(obj)
     return [(sheet["sheet name"], _table(sheet)) for sheet in obj]
@@ -60,14 +61,14 @@ def from_arrow(
 
     Return the sheets. With errors="strict", raise ValueError if
     anything outside MTSV would be left behind; with errors="ignore",
-    leave it behind. Raise ValueError for a column with no text form,
-    and LookupError for another errors value.
+    leave it behind. Raise ValueError, naming the position, for a
+    column with no text form, and LookupError for another errors value.
     """
     _errors.lookup_error(errors)
     sheets = []
     extras: set[str] = set()
-    for name, table in tables:
-        sheet, left = _sheet(name, table)
+    for index, (name, table) in enumerate(tables):
+        sheet, left = _sheet(name, table, index)
         sheets.append(sheet)
         extras |= left
     _errors.report(extras, errors)
@@ -92,14 +93,15 @@ def _table(sheet: dict[str, Any]) -> pa.Table:
     return pa.Table.from_arrays(columns, names=header_fields)
 
 
-def _sheet(name: str, table: pa.Table) -> tuple[dict[str, Any], set[str]]:
+def _sheet(name: str, table: pa.Table, index: int) -> tuple[dict[str, Any], set[str]]:
     """Create a sheet from a table.
 
     name -- the sheet name
     table -- the Arrow table
+    index -- the index of the sheet in the file
 
-    Return the sheet, and what it leaves behind. Raise ValueError for
-    a column with no text form.
+    Return the sheet, and what it leaves behind. Raise ValueError,
+    naming the position, for a column with no text form.
     """
     left = {"table metadata"} if table.schema.metadata else set()
     if table.num_columns == 0:
@@ -107,8 +109,9 @@ def _sheet(name: str, table: pa.Table) -> tuple[dict[str, Any], set[str]]:
             left.add("rows of a table without columns")
         return {"sheet name": name, "header": None, "records": []}, left
     columns = []
-    for field, column in zip(table.schema, table.columns):
-        values, column_left = _values(field, column)
+    for field_index, (field, column) in enumerate(zip(table.schema, table.columns)):
+        position = _data_model.field(_data_model.sheet(index), field_index)
+        values, column_left = _values(field, column, position)
         columns.append(values)
         left |= column_left
     sheet = {
@@ -119,14 +122,17 @@ def _sheet(name: str, table: pa.Table) -> tuple[dict[str, Any], set[str]]:
     return sheet, left
 
 
-def _values(field: pa.Field, column: pa.ChunkedArray) -> tuple[list[str], set[str]]:
+def _values(
+    field: pa.Field, column: pa.ChunkedArray, position: str
+) -> tuple[list[str], set[str]]:
     """Read a column as text.
 
     field -- the column's field
     column -- the column
+    position -- the position of its field in every line, as named
 
     Return its values as text, and what it leaves behind. Raise
-    ValueError for a column with no text form.
+    ValueError, naming the position, for a column with no text form.
     """
     left = set()
     if field.metadata:
@@ -138,7 +144,7 @@ def _values(field: pa.Field, column: pa.ChunkedArray) -> tuple[list[str], set[st
         if not any(is_scalar(data_type) for is_scalar in _SCALAR):
             raise ValueError(
                 f"column {field.name!r} of type {field.type}"
-                " cannot be represented in MTSV"
+                f" cannot be represented in MTSV: {position}"
             )
         left.add(f"type {field.type} of column {field.name!r}")
         column = _cast(column)

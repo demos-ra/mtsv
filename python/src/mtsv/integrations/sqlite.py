@@ -11,6 +11,7 @@ import sqlite3
 from typing import Any, BinaryIO
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors
 
 # Database File Format, 2.6.2 Internal Schema Objects: the names of
@@ -43,10 +44,10 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, if a sheet has no
-    lines, if a sheet name begins with "sqlite_", if two sheets share a
-    sheet name, if a header repeats a field name, or if a name holds
-    U+0000.
+    Raise ValueError, naming the position, if the sheets are not MTSV,
+    if a sheet has no lines, if a sheet name begins with "sqlite_", if
+    two sheets share a sheet name, if a header repeats a field name, or
+    if a name holds U+0000.
     """
     mtsv.dumps(obj)
     _check(obj)
@@ -101,44 +102,73 @@ def _check(obj: list[dict[str, Any]]) -> None:
 
     obj -- the MTSV sheets
 
-    Raise ValueError if a sheet has no lines, if a sheet name begins
-    with "sqlite_", if two sheets share a sheet name, if a header
-    repeats a field name, or if a name holds U+0000. CREATE TABLE, 3
-    Column Definitions: a table holds "one or more column definitions";
-    2 The CREATE TABLE command: a name beginning "sqlite_" is an error,
-    and a name already in the database is an error. A repeated field
-    name is refused as observed: SQLite reports "duplicate column
-    name". A name holding U+0000 is refused as observed of Python's
-    sqlite3, which reports "the query contains a null character".
+    Raise ValueError, naming the position, if a sheet has no lines, if
+    a sheet name begins with "sqlite_", if two sheets share a sheet
+    name, if a header repeats a field name, or if a name holds U+0000.
+    CREATE TABLE, 3 Column Definitions: a table holds "one or more
+    column definitions"; 2 The CREATE TABLE command: a name beginning
+    "sqlite_" is an error, and a name already in the database is an
+    error. A repeated field name is refused as observed: SQLite reports
+    "duplicate column name". A name holding U+0000 is refused as
+    observed of Python's sqlite3, which reports "the query contains a
+    null character".
     """
-    names = [sheet["sheet name"] for sheet in obj]
-    if len(set(names)) != len(names):
-        raise ValueError(
-            "each table name in a database is unique, so sheets that"
-            " share a sheet name cannot be represented in SQLite"
-        )
-    for sheet in obj:
-        if _internal(sheet["sheet name"]):
+    names = set()
+    for index, sheet in enumerate(obj):
+        name = sheet["sheet name"]
+        if name in names:
+            raise ValueError(
+                "each table name in a database is unique, so sheets that"
+                " share a sheet name cannot be represented in SQLite:"
+                f" {_data_model.sheet_name(index)}"
+            )
+        names.add(name)
+        if _internal(name):
             raise ValueError(
                 f"a table name beginning {_INTERNAL!r} is reserved, so"
-                " such a sheet name cannot be represented in SQLite"
+                " such a sheet name cannot be represented in SQLite:"
+                f" {_data_model.sheet_name(index)}"
+            )
+        if _NUL in name:
+            raise ValueError(
+                "a table or column name cannot hold U+0000, so such a"
+                " sheet name or header field cannot be represented in"
+                f" SQLite: {_data_model.sheet_name(index)}"
             )
         header = sheet["header"]
         if header is None:
             raise ValueError(
                 "a table holds one or more columns, so a sheet with no"
-                " lines cannot be represented in SQLite"
+                " lines cannot be represented in SQLite:"
+                f" {_data_model.sheet(index)}"
             )
-        if len(set(header)) != len(header):
+        _check_header(header, index)
+
+
+def _check_header(header: list[str], index: int) -> None:
+    """Refuse a header whose field names a table cannot hold.
+
+    header -- the header fields
+    index -- the index of the sheet in the file
+
+    Raise ValueError, naming the position, if the header repeats a
+    field name, or if a field name holds U+0000.
+    """
+    names = set()
+    for field_index, name in enumerate(header):
+        position = _data_model.field(_data_model.header(index), field_index)
+        if name in names:
             raise ValueError(
                 "each column name in a table is unique, so a header that"
-                " repeats a field name cannot be represented in SQLite"
+                " repeats a field name cannot be represented in SQLite:"
+                f" {position}"
             )
-        if any(_NUL in name for name in (sheet["sheet name"], *header)):
+        names.add(name)
+        if _NUL in name:
             raise ValueError(
                 "a table or column name cannot hold U+0000, so such a"
                 " sheet name or header field cannot be represented in"
-                " SQLite"
+                f" SQLite: {position}"
             )
 
 
@@ -178,7 +208,7 @@ def _sheets(
     Return the sheets, and what the database leaves behind: every
     object that is not a table. An internal object is SQLite's own and
     is not content, so it is neither a sheet nor left behind. Raise
-    ValueError for a value that has no text form.
+    ValueError, naming the position, for a value that has no text form.
     """
     left = {
         f"{kind} {name!r}"
@@ -189,46 +219,50 @@ def _sheets(
     for kind, name in objects:
         if kind != _TABLE or _internal(name):
             continue
-        sheet, table_left = _sheet(name, *tables[name])
+        sheet, table_left = _sheet(name, *tables[name], len(sheets))
         sheets.append(sheet)
         left |= table_left
     return sheets, left
 
 
 def _sheet(
-    name: str, header: list[str], rows: list[Any]
+    name: str, header: list[str], rows: list[Any], index: int
 ) -> tuple[dict[str, Any], set[str]]:
     """Turn one table into a sheet.
 
     name -- the table name
     header -- the column names
     rows -- the rows of the table
+    index -- the index of the sheet in the file
 
     Return the sheet, and what the table leaves behind. Raise
-    ValueError for a value that has no text form.
+    ValueError, naming the position, for a value that has no text form.
     """
     left: set[str] = set()
     records = []
-    for row in rows:
+    for record_index, row in enumerate(rows):
+        line = _data_model.record(index, record_index)
         fields = []
-        for column, value in zip(header, row):
-            text, value_left = _value(value, column)
+        for field_index, (column, value) in enumerate(zip(header, row)):
+            position = _data_model.field(line, field_index)
+            text, value_left = _value(value, column, position)
             fields.append(text)
             left |= value_left
         records.append(fields)
     return {"sheet name": name, "header": header, "records": records}, left
 
 
-def _value(value: Any, column: str) -> tuple[str, set[str]]:
+def _value(value: Any, column: str, position: str) -> tuple[str, set[str]]:
     """Read one stored value as text.
 
     value -- the value, of any storage class
     column -- the name of its column
+    position -- the position of its field, as named
 
     Return the text, and what the value leaves behind, named by its
-    storage class. Raise ValueError for a BLOB, which Datatypes In
-    SQLite, 2 stores "exactly as it was input" and which has no text
-    form.
+    storage class. Raise ValueError, naming the position, for a BLOB,
+    which Datatypes In SQLite, 2 stores "exactly as it was input" and
+    which has no text form.
     """
     if isinstance(value, str):
         return value, set()
@@ -236,7 +270,8 @@ def _value(value: Any, column: str) -> tuple[str, set[str]]:
         return "", {f"missing values in column {column!r}"}
     if isinstance(value, bytes):
         raise ValueError(
-            f"column {column!r} holds a BLOB, which cannot be represented in MTSV"
+            f"column {column!r} holds a BLOB, which cannot be represented"
+            f" in MTSV: {position}"
         )
     storage = _STORAGE_CLASSES[type(value)]
     return str(value), {f"{storage} values in column {column!r}"}

@@ -48,14 +48,24 @@ class TestCheckChars(unittest.TestCase):
     def test_refused(self):
         """A sheet name or field with a non-Char raises ValueError."""
         bad = chr(0x0B)
-        for sheets in (
-            [{"sheet name": bad, "header": ["a"], "records": []}],
-            [{"sheet name": "S", "header": [bad], "records": []}],
-            [{"sheet name": "S", "header": ["a"], "records": [[bad]]}],
+        for sheets, position in (
+            (
+                [{"sheet name": bad, "header": ["a"], "records": []}],
+                "sheet 1, sheet name",
+            ),
+            (
+                [{"sheet name": "S", "header": ["a", bad], "records": []}],
+                "sheet 1, header, field 2",
+            ),
+            (
+                [{"sheet name": "S", "header": ["a"], "records": [["b"], [bad]]}],
+                "sheet 1, record 2, field 1",
+            ),
         ):
             with self.subTest(sheets):
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError) as caught:
                     _xml.check_chars(sheets, "XML")
+                self.assertTrue(str(caught.exception).endswith(": " + position))
 
 
 class TestPrefixed(unittest.TestCase):

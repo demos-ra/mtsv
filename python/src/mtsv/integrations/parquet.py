@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors, arrow
 
 
@@ -22,8 +23,9 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, if the file holds no
-    sheet or more than one, or if its sheet name is not empty.
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if the sheets are not MTSV, or if its sheet
+    name is not empty.
     """
     mtsv.dumps(obj)
     _check(obj)
@@ -57,9 +59,10 @@ def _check(obj: list[dict[str, Any]]) -> None:
 
     obj -- the MTSV sheets
 
-    Raise ValueError if the file holds no sheet or more than one, or if
-    its sheet name is not empty. Apache Parquet, FileMetaData: a file
-    holds one schema, "a tree with a single root".
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if its sheet name is not empty. Apache
+    Parquet, FileMetaData: a file holds one schema, "a tree with a
+    single root".
     """
     if len(obj) != 1:
         raise ValueError(
@@ -70,5 +73,5 @@ def _check(obj: list[dict[str, Any]]) -> None:
         raise ValueError(
             "a Parquet file has nowhere to hold a sheet name, so a sheet"
             " whose sheet name is not empty cannot be represented in"
-            " Parquet"
+            f" Parquet: {_data_model.sheet_name(0)}"
         )

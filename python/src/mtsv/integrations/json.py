@@ -35,7 +35,7 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV.
+    Raise ValueError, naming the position, if the sheets are not MTSV.
     """
     mtsv.dumps(obj)
     text = json.dumps(obj, separators=_SEPARATORS) + "\n"

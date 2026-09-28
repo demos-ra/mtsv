@@ -37,14 +37,16 @@ class TestDump(unittest.TestCase):
     def test_named_sheet(self):
         """A sheet name that is not empty is refused."""
         sheets = [{"sheet name": "S", "header": ["a"], "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             csv.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, sheet name"))
 
     def test_empty_sheet(self):
         """RFC 4180, 2: a file holds a record; no lines is refused."""
         sheets = [{"sheet name": "", "header": None, "records": []}]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             csv.dump(sheets, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1"))
 
     def test_quoting(self):
         """RFC 4180, 6 and 7: quote a comma, double a quotation mark."""
@@ -88,8 +90,9 @@ class TestLoad(unittest.TestCase):
 
     def test_line_break_in_a_field(self):
         """A field holding a line break cannot be held by MTSV."""
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             csv.load(io.BytesIO(b'a\r\n"b\r\nc"\r\n'))
+        self.assertTrue(str(caught.exception).endswith(": sheet 1, record 1, field 1"))
 
     def test_field_count_must_match(self):
         """A line with a different field count is refused."""

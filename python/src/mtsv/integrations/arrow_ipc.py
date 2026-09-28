@@ -12,6 +12,7 @@ from typing import Any, BinaryIO
 import pyarrow as pa
 
 import mtsv
+from mtsv import _data_model
 from mtsv.integrations import _errors, arrow
 
 
@@ -21,8 +22,9 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError if the sheets are not MTSV, if the file holds no
-    sheet or more than one, or if its sheet name is not empty.
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if the sheets are not MTSV, or if its sheet
+    name is not empty.
     """
     mtsv.dumps(obj)
     _check(obj)
@@ -57,9 +59,10 @@ def _check(obj: list[dict[str, Any]]) -> None:
 
     obj -- the MTSV sheets
 
-    Raise ValueError if the file holds no sheet or more than one, or if
-    its sheet name is not empty. Arrow Columnar Format, IPC Streaming
-    Format: one schema serves every record batch of a file.
+    Raise ValueError if the file holds no sheet or more than one, and,
+    naming the position, if its sheet name is not empty. Arrow Columnar
+    Format, IPC Streaming Format: one schema serves every record batch
+    of a file.
     """
     if len(obj) != 1:
         raise ValueError(
@@ -70,5 +73,5 @@ def _check(obj: list[dict[str, Any]]) -> None:
         raise ValueError(
             "an Arrow IPC file has nowhere to hold a sheet name, so a"
             " sheet whose sheet name is not empty cannot be represented"
-            " in Arrow IPC"
+            f" in Arrow IPC: {_data_model.sheet_name(0)}"
         )

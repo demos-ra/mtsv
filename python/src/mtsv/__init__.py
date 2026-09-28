@@ -27,7 +27,8 @@ def dump(obj: list[dict[str, Any]], fp: BinaryIO) -> None:
     obj -- the MTSV sheets
     fp -- a binary file object open for writing
 
-    Raise ValueError for sheets that MTSV cannot represent.
+    Raise ValueError, naming the position, for sheets that MTSV cannot
+    represent.
     """
     fp.write(dumps(obj).encode("utf-8"))
 
@@ -37,7 +38,8 @@ def dumps(obj: list[dict[str, Any]]) -> str:
 
     obj -- the MTSV sheets
 
-    Raise ValueError for sheets that MTSV cannot represent.
+    Raise ValueError, naming the position, for sheets that MTSV cannot
+    represent.
     """
     return _generator.mtsv_file(obj)
 

@@ -345,9 +345,24 @@ class TestDump(unittest.TestCase):
             with self.subTest(repr(value)):
                 field = [{"sheet name": "S", "header": [value], "records": []}]
                 name = [{"sheet name": value, "header": ["a"], "records": []}]
-                for sheets in (field, name):
-                    with self.assertRaises(ValueError):
+                for sheets, position in (
+                    (field, "sheet 1, header, field 1"),
+                    (name, "sheet 1, sheet name"),
+                ):
+                    with self.assertRaises(ValueError) as caught:
                         xlsx.dump(sheets, io.BytesIO())
+                    self.assertTrue(str(caught.exception).endswith(": " + position))
+
+    def test_duplicate_sheet_names(self):
+        """Part 1, 18.2.19: a sheet name given twice is refused."""
+        value = [
+            {"sheet name": "S", "header": ["a"], "records": []},
+            {"sheet name": "T", "header": ["a"], "records": []},
+            {"sheet name": "S", "header": ["a"], "records": []},
+        ]
+        with self.assertRaises(ValueError) as caught:
+            xlsx.dump(value, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 3, sheet name"))
 
     def test_wider_than_the_grid(self):
         """Part 1, 18.17.5.1: a sheet past column XFD is refused."""
@@ -358,8 +373,9 @@ class TestDump(unittest.TestCase):
                 "records": [],
             }
         ]
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as caught:
             xlsx.dump(value, io.BytesIO())
+        self.assertTrue(str(caught.exception).endswith(": sheet 1"))
 
     def test_package(self):
         """The package holds the parts the workbook needs."""

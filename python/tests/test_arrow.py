@@ -348,11 +348,14 @@ class TestFromArrow(unittest.TestCase):
         """A type with no text form is refused, whatever the setting."""
         for label, data_type in types_without_text().items():
             with self.subTest(label):
-                table = empty_column(data_type)
+                pairs = [("S", column(["x"])), ("T", empty_column(data_type))]
                 for errors in ("strict", "ignore"):
                     with self.subTest(errors=errors):
-                        with self.assertRaises(ValueError):
-                            arrow.from_arrow([("S", table)], errors=errors)
+                        with self.assertRaises(ValueError) as caught:
+                            arrow.from_arrow(pairs, errors=errors)
+                        self.assertTrue(
+                            str(caught.exception).endswith(": sheet 2, field 1")
+                        )
 
     def test_missing_values_need_confirmation(self):
         """A missing value is left behind, and comes back empty."""
