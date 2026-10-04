@@ -5,7 +5,8 @@ arrow -- convert between MTSV sheets and Apache Arrow tables
 arrow_ipc -- convert between MTSV sheets and Arrow IPC files
 csv -- convert between MTSV sheets and CSV
 json -- convert between MTSV sheets and JSON
-ods -- convert between MTSV sheets and OpenDocument spreadsheets
+ods -- convert between MTSV sheets and OpenDocument packages
+odf_single_xml -- convert between MTSV sheets and ODF single XML files
 parquet -- convert between MTSV sheets and Apache Parquet files
 sqlite -- convert between MTSV sheets and SQLite databases
 xlsx -- convert between MTSV sheets and OOXML workbooks
@@ -37,7 +38,8 @@ MTSV = ".mtsv"
 # "xlsx", ".sqlite" and ".parquet" in the IANA registrations of the
 # OpenDocument spreadsheet, OOXML spreadsheet, SQLite and Apache
 # Parquet types. The Arrow Columnar Format, IPC File Format recommends
-# ".arrow".
+# ".arrow". ODF 1.3 Part 3, 3.19: file name extensions are listed for
+# "Office documents contained in a package"; odf_single_xml has none.
 _MODULES = {
     ".arrow": "arrow_ipc",
     ".csv": "csv",

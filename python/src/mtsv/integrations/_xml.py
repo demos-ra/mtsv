@@ -1,4 +1,4 @@
-"""XML 1.0 characters and namespace names, for ODS and XLSX.
+"""XML 1.0 characters and namespace names, for ODF and XLSX.
 
 Functions:
 check_chars -- refuse a sheet name or field holding a non-Char

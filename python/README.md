@@ -1,9 +1,9 @@
 # MTSV for Python
 
 A parser and a generator for Multi-Sheet Tab-Separated Values (MTSV),
-with integrations for CSV, JSON, spreadsheets (ODS and XLSX), databases
-(SQLite) and data tools (Apache Arrow, Parquet and Arrow IPC). The
-version is the `version` field of `pyproject.toml`.
+with integrations for CSV, JSON, spreadsheets (ODS, ODF single XML files
+and XLSX), databases (SQLite) and data tools (Apache Arrow, Parquet and
+Arrow IPC). The version is the `version` field of `pyproject.toml`.
 
 * [Specification](https://github.com/demos-ra/mtsv-spec)
 * [Repository](https://github.com/demos-ra/mtsv)
@@ -139,6 +139,22 @@ mtsv book.mtsv book.ods
 mtsv book.ods book.mtsv
 ```
 
+## Spreadsheets (ODF single XML files)
+
+```python
+from mtsv.integrations import odf_single_xml
+
+with open("book", "wb") as file:
+    odf_single_xml.dump(sheets, file)
+
+with open("book", "rb") as file:
+    sheets = odf_single_xml.load(file)
+```
+
+ODF lists file name extensions only for documents contained in a
+package, so a single XML file has none, and the command does not
+convert it.
+
 ## Spreadsheets (XLSX)
 
 ```python
@@ -216,7 +232,7 @@ sheets, take `to_arrow` and write one file per pair.
 MTSV holds sheets, names, rows, and text. Everything else is left at the
 door, and each door reports what it dropped.
 
-Going out, a format refuses what it cannot hold. ODS and XLSX both
+Going out, a format refuses what it cannot hold. ODF and XLSX both
 raise `ValueError` for a character that XML 1.0 does not allow. XLSX
 also raises for a file with no sheets, for two sheets with one sheet
 name, and for a sheet wider than 16,384 columns or longer than
@@ -248,11 +264,11 @@ list in its `left_behind` attribute, so a program can collect them with
 a handler of its own.
 
 Two differences are worth knowing. Empty rows and columns at the edge of
-an ODS sheet do not come back, so an ODS sheet of only empty fields comes
+an ODF sheet do not come back, so an ODF sheet of only empty fields comes
 back as an empty sheet; XLSX keeps them, because a workbook may leave a
 cell out entirely. And a workbook holds a date as a serial number, with
 the date format kept apart from it, so a cell showing `Jan-23` comes back
-from XLSX as `44927` where ODS gives `2023-01-01`.
+from XLSX as `44927` where ODF gives `2023-01-01`.
 
 Text that MTSV cannot hold, such as a tab or line break inside a value,
 always raises `ValueError`. So does a value with no text form at all: a
@@ -280,8 +296,10 @@ src/mtsv/
     _xml           what XML 1.0 allows in names and characters
     _sheet         how the lines of a table become a sheet
     _errors        the errors values, and how loss is reported
+    _odf           how the tables of an ODF spreadsheet become sheets
     arrow          how Arrow types become text
-    csv · json · ods · xlsx · sqlite    one outside format each
+    csv · json · ods · odf_single_xml · xlsx · sqlite
+                   one outside format each
     arrow_ipc · parquet                 one Arrow-backed format each
     __init__       which extension names which format
   command
