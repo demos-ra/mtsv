@@ -1,46 +1,43 @@
-# MTSV
+mtsv
+====
 
-Multi-Sheet Tab-Separated Values (MTSV) is TSV with one more dimension: a tab
-separates fields, a line break separates records, and a form feed separates
-sheets. This repository holds the conformance test files and the
-implementations.
+Convert Excel (XLSX), ODS, CSV, JSON, SQLite, Parquet and Arrow files to and
+from Multi-Sheet Tab-Separated Values (MTSV), with a Python library and the
+mtsv command. MTSV is TSV with sheets: a whole Excel workbook becomes one
+plain-text file that people, AI agents and tools such as diff and grep can
+read. This repository holds the conformance tests and the implementations
+of the [MTSV specification](https://github.com/demos-ra/mtsv-spec).
 
-* [Specification](https://github.com/demos-ra/mtsv-spec)
-* [Internet-Draft on the IETF Datatracker](https://datatracker.ietf.org/doc/draft-demosra-mtsv/)
+Why It Is Useful
+----------------
 
-## Layout
+One command converts between any two of eight formats, every sheet at once.
+Whatever a format cannot carry, such as formatting or formulas, is named on
+standard error instead of being dropped silently, and `-e strict` refuses
+the conversion instead. Conformance tests shared by every implementation
+fix what each file means.
 
-| Folder         | Contents                                                |
-|----------------|---------------------------------------------------------|
-| `conformance/` | Test files shared by every implementation               |
-| `python/`      | Python implementation, with the `mtsv` command and CSV, JSON, ODS, ODF single XML file, XLSX, SQLite, Apache Arrow, Parquet and Arrow IPC integrations |
+Get Started
+-----------
 
-Each language folder holds one implementation of the specification: a parser
-and a generator. Integrations connect an implementation to other standards,
-and a command lets a person use it from a terminal. Conformance is the same
-for every language, so it sits beside them rather than inside one.
+* Install the command: `pipx install mtsv`
+* Convert Excel to MTSV: `mtsv book.xlsx`, which writes book.mtsv beside it
+* Convert MTSV to another format: `mtsv book.mtsv book.ods`
+* Use the library, and every format: [python/README.md](python/README.md)
 
-## Conformance
+Details
+-------
 
-See [conformance/README.md](conformance/README.md).
+* Specification: [MTSV, an IETF Internet-Draft](https://github.com/demos-ra/mtsv-spec)
+* Requirements: Python 3.11 or later; for Parquet and Arrow, pyarrow, installed with `pipx install "mtsv[arrow]"`
+* Version: the version field of [python/pyproject.toml](python/pyproject.toml); released on [PyPI](https://pypi.org/project/mtsv/); versions follow [Semantic Versioning](https://semver.org)
+* Layout: [conformance/](conformance/README.md), the tests every implementation passes; [python/](python/README.md), the Python implementation
+* License: [MIT](LICENSE)
 
-## Python
+Get Help
+--------
 
-See [python/README.md](python/README.md) to install and use the package. Its
-version is the `version` field of
-[python/pyproject.toml](python/pyproject.toml).
-
-## Status
-
-Released on PyPI as [mtsv](https://pypi.org/project/mtsv/). Versions follow
-[Semantic Versioning](https://semver.org).
-
-## Help
-
-Report a problem or ask a question in the
-[issue tracker](https://github.com/demos-ra/mtsv/issues). MTSV is
-maintained by Demos Ra.
-
-## License
-
-[MIT](LICENSE)
+* Issues: [mtsv issue tracker](https://github.com/demos-ra/mtsv/issues)
+* Security: [SECURITY.md](SECURITY.md)
+* Maintainer: Demos Ra
+* More: [all MTSV tools by Demos Ra](https://github.com/demos-ra)
